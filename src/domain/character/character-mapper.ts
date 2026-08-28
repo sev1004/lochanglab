@@ -1,4 +1,5 @@
 import { CharacterApiResponse, LostArkGem } from "@/types/lostark-api";
+import { mapEquipment, type EquipmentProfile } from "@/domain/character/equipment-parser";
 
 export type CharacterProfile = {
   name: string;
@@ -8,7 +9,7 @@ export type CharacterProfile = {
   level: string;
   characterImage: string | null;
   stats: [string, string][];
-  equipment: [string, string, string][];
+  equipment: EquipmentProfile[];
   engravings: string[];
   skills: NonNullable<CharacterApiResponse["skills"]>;
   gems: LostArkGem[];
@@ -28,7 +29,7 @@ export function mapCharacterResponse(data: CharacterApiResponse): CharacterProfi
     level: profile.ItemAvgLevel ?? profile.ItemMaxLevel ?? "-",
     characterImage: profile.CharacterImage ?? null,
     stats,
-    equipment: (data.equipment ?? []).map((item) => [item.Type ?? item.Name ?? "장비", item.Name ?? "이름 없음", item.Grade ?? ""] as [string, string, string]),
+    equipment: mapEquipment(data.equipment ?? []),
     engravings: engravingItems.map((item) => item.Name ?? "이름 없음"),
     skills: data.skills ?? [],
     gems,

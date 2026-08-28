@@ -2,6 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { mapCharacterResponse, type CharacterProfile } from "@/domain/character/character-mapper";
+import type { EquipmentProfile } from "@/domain/character/equipment-parser";
 import { loadLatestCharacter, saveCharacter } from "@/lib/character-storage";
 import { fetchCharacter, LostArkApiError } from "@/lib/lostark-api/client";
 
@@ -18,6 +19,69 @@ function getErrorMessage(error: unknown) {
   if (error instanceof LostArkApiError) return errorMessages[error.status] ?? `로스트아크 API 요청에 실패했습니다. (${error.status})`;
   if (error instanceof TypeError) return "로스트아크 API에 연결하지 못했습니다. 네트워크와 브라우저 설정을 확인해주세요.";
   return error instanceof Error ? error.message : "캐릭터 조회에 실패했습니다.";
+}
+
+function qualityTone(quality: number | null) {
+  if (quality === null) return "quality-none";
+  if (quality >= 90) return "quality-high";
+  if (quality >= 70) return "quality-mid";
+  return "quality-low";
+}
+
+function ItemArtwork({ item }: { item: EquipmentProfile }) {
+  return (
+    <div className="item-artwork">
+      {item.icon ? <img src={item.icon} alt={`${item.slot} 아이템`} /> : <span>◇</span>}
+      {item.tier ? <em>{item.tier}T</em> : null}
+    </div>
+  );
+}
+
+function GearCard({ item }: { item: EquipmentProfile }) {
+  return (
+    <article className="gear-card">
+      <ItemArtwork item={item} />
+      <div className="item-content">
+        <div className="item-heading">
+          <span className="slot-label">{item.slot}</span>
+          <span className="grade-label">{item.tier ? `T${item.tier} ` : ""}{item.grade}</span>
+        </div>
+        <strong className="item-name">{item.name}</strong>
+        <div className="gear-values">
+          <span className={qualityTone(item.quality)}><small>품질</small>{item.quality ?? "-"}</span>
+          <span><small>아이템 레벨</small>{item.itemLevel ?? "-"}</span>
+          <span><small>일반 재련</small>{item.enhancement === null ? "-" : `+${item.enhancement}`}</span>
+          <span><small>상급 재련</small>{item.advancedHoning === null ? "-" : `X${item.advancedHoning}`}</span>
+        </div>
+      </div>
+    </article>
+  );
+}
+
+function AccessoryCard({ item }: { item: EquipmentProfile }) {
+  return (
+    <article className="accessory-card">
+      <ItemArtwork item={item} />
+      <div className="item-content">
+        <div className="item-heading">
+          <span className="slot-label">{item.slot}</span>
+          <span className="grade-label">{item.tier ? `T${item.tier} ` : ""}{item.grade}</span>
+        </div>
+        <strong className="item-name">{item.name}</strong>
+        <div className="accessory-meta">
+          <span className={qualityTone(item.quality)}>품질 {item.quality ?? "-"}</span>
+          {item.baseStats.map((stat) => <span key={stat}>{stat}</span>)}
+        </div>
+        {item.options.length ? (
+          <ul className="option-list">
+            {item.options.map((option, index) => <li key={`${option}-${index}`}>{option}</li>)}
+          </ul>
+        ) : (
+          <p className="option-empty">표시 가능한 연마·부여 옵션이 없습니다.</p>
+        )}
+      </div>
+    </article>
+  );
 }
 
 export default function Home() {
@@ -64,6 +128,9 @@ export default function Home() {
     }
   }
 
+  const gear = character?.equipment.filter((item) => item.category === "gear") ?? [];
+  const accessories = character?.equipment.filter((item) => item.category === "accessory") ?? [];
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -71,10 +138,12 @@ export default function Home() {
         <nav><a className="active">캐릭터 조회</a><a>시뮬레이션</a><a>세팅 비교</a></nav>
         <button className="theme" type="button" aria-label="테마 전환">◐</button>
       </header>
+
       <section className="hero">
         <div><p className="eyebrow">LOST ARK · CHARACTER PROFILE</p><h1>캐릭터 스펙을 불러오세요</h1><p className="subtitle">로스트아크 API에서 캐릭터 정보를 조회하고, DPS 시뮬레이션의 기준 세팅으로 사용합니다.</p></div>
         <div className="hero-orb">✦</div>
       </section>
+
       <section className="search-card">
         <div className="section-title"><span className="step">01</span><div><h2>캐릭터 조회</h2><p>API 키는 브라우저 메모리에서 조회 요청에만 사용하며 저장하지 않습니다.</p></div></div>
         <form onSubmit={search} className="search-form">
@@ -83,21 +152,44 @@ export default function Home() {
         </form>
         <p className="form-message" aria-live="polite"><span className="status-dot" />{message}</p>
       </section>
+
       {character ? (
         <section className="profile-grid">
           <div className="profile-main">
-            <div className="profile-heading"><div className="avatar">⚔</div><div><p className="eyebrow">CHARACTER PROFILE</p><h2>{character.name}</h2><p>{character.server} · {character.className} · {character.engraving}</p></div><span className="ready">브라우저 저장</span></div>
-            <div className="stat-row">{character.stats.map(([label, value], index) => <div className="stat" key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}<div className="stat"><span>아이템 레벨</span><strong>{character.level}</strong></div></div>
-            <div className="panel"><div className="panel-title"><h3>장비</h3><span>{character.equipment.length}개</span></div><div className="equipment-grid">{character.equipment.map(([slot, name, grade], index) => <div className="equipment" key={`${slot}-${index}`}><div className="item-icon">◇</div><div><strong>{slot}</strong><p>{name}</p><small>{grade}</small></div></div>)}</div></div>
+            <div className="profile-heading">
+              <div className="avatar">⚔</div>
+              <div><p className="eyebrow">CHARACTER PROFILE</p><h2>{character.name}</h2><p>{character.server} · {character.className} · {character.engraving}</p></div>
+              <span className="ready">브라우저 저장</span>
+            </div>
+
+            <div className="stat-row">
+              {character.stats.map(([label, value], index) => <div className="stat" key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}
+              <div className="stat"><span>아이템 레벨</span><strong>{character.level}</strong></div>
+            </div>
+
+            <div className="panel equipment-panel">
+              <div className="panel-title"><div><h3>전투 장비</h3><p>DPS 계산에 사용하는 장비만 표시합니다.</p></div><span>{gear.length}개</span></div>
+              {gear.length ? <div className="gear-grid">{gear.map((item) => <GearCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 전투 장비 정보가 없습니다.</p>}
+            </div>
+
+            <div className="panel equipment-panel">
+              <div className="panel-title"><div><h3>악세사리</h3><p>품질, 기본 스탯과 연마·부여 옵션을 표시합니다.</p></div><span>{accessories.length}개</span></div>
+              {accessories.length ? <div className="accessory-grid">{accessories.map((item) => <AccessoryCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 악세사리 정보가 없습니다.</p>}
+            </div>
           </div>
+
           <aside className="side-column">
-            <div className="panel"><div className="panel-title"><h3>각인</h3><span>{character.engravings.length}개</span></div>{character.engravings.length ? <ul className="engraving-list">{character.engravings.map((item, index) => <li key={`${item}-${index}`}><span>◆</span>{item}</li>)}</ul> : <p className="empty-copy">표시할 각인 정보가 없습니다.</p>}</div>
+            <div className="panel">
+              <div className="panel-title"><h3>각인</h3><span>{character.engravings.length}개</span></div>
+              {character.engravings.length ? <ul className="engraving-list">{character.engravings.map((item, index) => <li key={`${item}-${index}`}><span>◆</span>{item}</li>)}</ul> : <p className="empty-copy">표시할 각인 정보가 없습니다.</p>}
+            </div>
             <div className="next-card"><span className="step">02</span><h3>시뮬레이션 준비</h3><p>원본 스펙과 별도의 편집용 세팅을 브라우저에 함께 저장했습니다. 다음 단계에서 스킬과 장비를 변경할 수 있습니다.</p><button type="button">시뮬레이션으로 이동 →</button></div>
           </aside>
         </section>
       ) : (
         <section className="feature-grid">{[["⌁", "상세 스펙 조회", "장비, 각인, 스탯 정보를 한눈에 확인"], ["◇", "원본 세팅 보존", "조회한 캐릭터를 기준 세팅으로 복사"], ["✦", "DPS 시뮬레이션", "조건을 바꾸며 결과를 비교"]].map(([icon, title, text]) => <div className="feature" key={title}><span>{icon}</span><h3>{title}</h3><p>{text}</p></div>)}</section>
       )}
+
       <footer>DATA PROVIDED BY LOST ARK OPEN API <span>·</span> GLAVIER DPS SIMULATOR v0.1</footer>
     </main>
   );

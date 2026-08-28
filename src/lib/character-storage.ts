@@ -1,4 +1,4 @@
-import type { CharacterProfile } from "@/domain/character/character-mapper";
+import { mapCharacterResponse, type CharacterProfile } from "@/domain/character/character-mapper";
 
 const DATABASE_NAME = "glavier-dps-simulator";
 const DATABASE_VERSION = 1;
@@ -10,8 +10,10 @@ export type StoredCharacter = {
   source: CharacterProfile;
   loadout: CharacterProfile;
   savedAt: string;
-  schemaVersion: 1;
+  schemaVersion: 2;
 };
+
+type LegacyStoredCharacter = Omit<StoredCharacter, "schemaVersion"> & { schemaVersion?: 1 };
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -38,7 +40,7 @@ export async function saveCharacter(profile: CharacterProfile): Promise<StoredCh
     source: structuredClone(profile),
     loadout: structuredClone(profile),
     savedAt: new Date().toISOString(),
-    schemaVersion: 1,
+    schemaVersion: 2,
   };
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(CHARACTER_STORE, "readwrite");
@@ -56,11 +58,19 @@ export async function loadLatestCharacter(): Promise<StoredCharacter | null> {
   const id = localStorage.getItem(LATEST_KEY);
   if (!id) return null;
   const database = await openDatabase();
-  const stored = await new Promise<StoredCharacter | undefined>((resolve, reject) => {
+  const stored = await new Promise<StoredCharacter | LegacyStoredCharacter | undefined>((resolve, reject) => {
     const request = database.transaction(CHARACTER_STORE, "readonly").objectStore(CHARACTER_STORE).get(id);
-    request.onsuccess = () => resolve(request.result as StoredCharacter | undefined);
+    request.onsuccess = () => resolve(request.result as StoredCharacter | LegacyStoredCharacter | undefined);
     request.onerror = () => reject(request.error ?? new Error("저장된 캐릭터를 읽지 못했습니다."));
   });
   database.close();
-  return stored ?? null;
+  if (!stored) return null;
+  if (stored.schemaVersion === 2) return stored;
+
+  return {
+    ...stored,
+    source: mapCharacterResponse(stored.source.raw),
+    loadout: mapCharacterResponse(stored.loadout.raw),
+    schemaVersion: 2,
+  };
 }
