@@ -16,9 +16,9 @@
 - 단위 테스트: Vitest
 - E2E 테스트: Playwright
 - 패키지 관리자: pnpm
-- 배포: GitHub Actions를 통한 서버리스 배포
+- 배포: GitHub Actions를 통한 GitHub Pages 정적 배포
 
-프레임워크와 배포 대상은 초기 설정 시 확정한다. 외부 API 키가 필요한 요청은 서버리스 API를 통해 처리하며, 비밀값을 브라우저 코드에 포함하지 않는다.
+사용자는 자신의 API 키를 브라우저에 입력한다. 키는 로스트아크 API 직접 조회에만 사용하고 영구 저장하지 않는다. 캐릭터 데이터와 시뮬레이션 세팅은 IndexedDB에 저장하며 DPS 계산은 브라우저에서 수행한다.
 
 ## 3. 아키텍처 원칙
 
@@ -83,7 +83,7 @@
 - 예시: `feat(simulation): add cooldown calculation`
 - Pull Request에는 변경 내용, 검증 방법, 계산 결과 변화 여부를 적는다.
 - GitHub Actions에서 lint, test, build를 실행한다.
-- 비밀값은 GitHub Actions Secrets 또는 배포 플랫폼의 환경 변수로 관리한다.
+- API 키나 비밀값을 저장소 또는 GitHub Actions에 등록하지 않는다.
 
 ## 7. 구현 순서
 
@@ -93,7 +93,7 @@
 4. 단위 테스트와 기준 시나리오 작성
 5. 설정 편집 UI 구현
 6. 결과 요약 및 차트 구현
-7. 서버리스 배포와 CI 구성
+7. GitHub Pages 정적 배포와 CI 구성
 
 ## 8. 문서화 기준
 
