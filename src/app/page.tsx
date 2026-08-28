@@ -136,10 +136,54 @@ function ArkGridPanel({ arkGrid }: { arkGrid: ArkGridProfile }) {
   );
 }
 
+type SimulatorTab = "전체" | "보석" | "장비 및 악세사리" | "각인" | "아크패시브" | "아크그리드";
+
+const simulatorTabs: SimulatorTab[] = ["전체", "보석", "장비 및 악세사리", "각인", "아크패시브", "아크그리드"];
+
+function OverviewPanel({ character, gear, accessories }: { character: CharacterProfile; gear: EquipmentProfile[]; accessories: EquipmentProfile[] }) {
+  const summaries = [
+    ["전투 장비", `${gear.length}개`, "품질 · 재련"],
+    ["악세사리", `${accessories.length}개`, "연마 옵션"],
+    ["보석", `${character.gems.length}개`, "스킬 효과"],
+    ["아크패시브", `${character.arkPassive.points.length}종`, character.arkPassive.isActive ? "활성" : "미확인"],
+    ["아크그리드", `${character.arkGrid.effects.length}개`, "선택 코어"],
+    ["각인", `${character.engravings.length}개`, character.engravings.slice(0, 2).join(" · ") || "미확인"],
+  ];
+  return <div className="overview-grid">{summaries.map(([label, value, detail]) => <article className="overview-card" key={label}><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}</div>;
+}
+
+function EquipmentPanels({ gear, accessories }: { gear: EquipmentProfile[]; accessories: EquipmentProfile[] }) {
+  return <div className="tab-panels">
+    <div className="panel equipment-panel">
+      <div className="panel-title"><div><h3>전투 장비</h3><p>DPS 계산에 사용하는 장비만 표시합니다.</p></div><span>{gear.length}개</span></div>
+      {gear.length ? <div className="gear-grid">{gear.map((item) => <GearCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 전투 장비 정보가 없습니다.</p>}
+    </div>
+    <div className="panel equipment-panel">
+      <div className="panel-title"><div><h3>악세사리</h3><p>품질, 기본 스탯과 연마·부여 옵션을 표시합니다.</p></div><span>{accessories.length}개</span></div>
+      {accessories.length ? <div className="accessory-grid">{accessories.map((item) => <AccessoryCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 악세사리 정보가 없습니다.</p>}
+    </div>
+  </div>;
+}
+
+function GemPanel({ gems }: { gems: GemProfile[] }) {
+  return <div className="panel system-panel">
+    <div className="panel-title"><div><h3>보석</h3><p>스킬별 보석 종류, 레벨과 효과를 표시합니다.</p></div><span>{gems.length}개</span></div>
+    {gems.length ? <div className="gem-grid">{gems.map((gem) => <GemCard gem={gem} key={gem.id} />)}</div> : <p className="empty-copy">표시할 보석 정보가 없습니다.</p>}
+  </div>;
+}
+
+function EngravingPanel({ engravings }: { engravings: string[] }) {
+  return <div className="panel engraving-panel">
+    <div className="panel-title"><div><h3>각인</h3><p>현재 캐릭터에 적용된 각인입니다.</p></div><span>{engravings.length}개</span></div>
+    {engravings.length ? <ul className="engraving-list">{engravings.map((item, index) => <li key={`${item}-${index}`}><span>◆</span>{item}</li>)}</ul> : <p className="empty-copy">표시할 각인 정보가 없습니다.</p>}
+  </div>;
+}
+
 export default function Home() {
   const [apiKey, setApiKey] = useState("");
   const [characterName, setCharacterName] = useState("");
   const [character, setCharacter] = useState<CharacterProfile | null>(null);
+  const [activeTab, setActiveTab] = useState<SimulatorTab>("전체");
   const [isSearching, setIsSearching] = useState(false);
   const [message, setMessage] = useState("로스트아크 API 키와 캐릭터명을 입력해주세요.");
 
@@ -184,7 +228,7 @@ export default function Home() {
   const accessories = character?.equipment.filter((item) => item.category === "accessory") ?? [];
 
   return (
-    <main className="shell">
+    <main className={character ? "shell has-character" : "shell"}>
       <header className="topbar">
         <div className="brand"><span className="brand-mark">G</span><div><strong>GLAVIER</strong><small>DPS SIMULATOR</small></div></div>
         <nav><a className="active">캐릭터 조회</a><a>시뮬레이션</a><a>세팅 비교</a></nav>
@@ -219,32 +263,19 @@ export default function Home() {
               <div className="stat"><span>아이템 레벨</span><strong>{character.level}</strong></div>
             </div>
 
-            <div className="panel equipment-panel">
-              <div className="panel-title"><div><h3>전투 장비</h3><p>DPS 계산에 사용하는 장비만 표시합니다.</p></div><span>{gear.length}개</span></div>
-              {gear.length ? <div className="gear-grid">{gear.map((item) => <GearCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 전투 장비 정보가 없습니다.</p>}
-            </div>
+            <nav className="simulator-menu" aria-label="시뮬레이터 항목">
+              {simulatorTabs.map((tab) => <button className={activeTab === tab ? "active" : ""} key={tab} type="button" onClick={() => setActiveTab(tab)}>{tab}</button>)}
+            </nav>
 
-            <div className="panel equipment-panel">
-              <div className="panel-title"><div><h3>악세사리</h3><p>품질, 기본 스탯과 연마·부여 옵션을 표시합니다.</p></div><span>{accessories.length}개</span></div>
-              {accessories.length ? <div className="accessory-grid">{accessories.map((item) => <AccessoryCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 악세사리 정보가 없습니다.</p>}
+            <div className="tab-content">
+              {activeTab === "전체" ? <OverviewPanel character={character} gear={gear} accessories={accessories} /> : null}
+              {activeTab === "보석" ? <GemPanel gems={character.gems} /> : null}
+              {activeTab === "장비 및 악세사리" ? <EquipmentPanels gear={gear} accessories={accessories} /> : null}
+              {activeTab === "각인" ? <EngravingPanel engravings={character.engravings} /> : null}
+              {activeTab === "아크패시브" ? <ArkPassivePanel arkPassive={character.arkPassive} /> : null}
+              {activeTab === "아크그리드" ? <ArkGridPanel arkGrid={character.arkGrid} /> : null}
             </div>
-
-            <div className="panel system-panel">
-              <div className="panel-title"><div><h3>보석</h3><p>스킬별 보석 종류, 레벨과 효과를 표시합니다.</p></div><span>{character.gems.length}개</span></div>
-              {character.gems.length ? <div className="gem-grid">{character.gems.map((gem) => <GemCard gem={gem} key={gem.id} />)}</div> : <p className="empty-copy">표시할 보석 정보가 없습니다.</p>}
-            </div>
-
-            <ArkPassivePanel arkPassive={character.arkPassive} />
-            <ArkGridPanel arkGrid={character.arkGrid} />
           </div>
-
-          <aside className="side-column">
-            <div className="panel">
-              <div className="panel-title"><h3>각인</h3><span>{character.engravings.length}개</span></div>
-              {character.engravings.length ? <ul className="engraving-list">{character.engravings.map((item, index) => <li key={`${item}-${index}`}><span>◆</span>{item}</li>)}</ul> : <p className="empty-copy">표시할 각인 정보가 없습니다.</p>}
-            </div>
-            <div className="next-card"><span className="step">02</span><h3>시뮬레이션 준비</h3><p>원본 스펙과 별도의 편집용 세팅을 브라우저에 함께 저장했습니다. 다음 단계에서 스킬과 장비를 변경할 수 있습니다.</p><button type="button">시뮬레이션으로 이동 →</button></div>
-          </aside>
         </section>
       ) : (
         <section className="feature-grid">{[["⌁", "상세 스펙 조회", "장비, 각인, 스탯 정보를 한눈에 확인"], ["◇", "원본 세팅 보존", "조회한 캐릭터를 기준 세팅으로 복사"], ["✦", "DPS 시뮬레이션", "조건을 바꾸며 결과를 비교"]].map(([icon, title, text]) => <div className="feature" key={title}><span>{icon}</span><h3>{title}</h3><p>{text}</p></div>)}</section>

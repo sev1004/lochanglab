@@ -70,13 +70,13 @@ function plainText(value: string | null) {
   return text || null;
 }
 
-function tooltipText(tooltip?: string) {
+function tooltipLines(tooltip?: string) {
   if (!tooltip) return null;
   let value: unknown = tooltip;
   try {
     value = JSON.parse(tooltip) as unknown;
   } catch {
-    return plainText(tooltip);
+    return [plainText(tooltip)].filter((line): line is string => Boolean(line));
   }
 
   const strings: string[] = [];
@@ -86,7 +86,10 @@ function tooltipText(tooltip?: string) {
     else if (item && typeof item === "object") Object.values(item as UnknownRecord).forEach(collect);
   }
   collect(value);
-  return plainText(strings.join("<br>"));
+  return strings
+    .flatMap((item) => item.split(/<br\s*\/?>/i))
+    .map((item) => plainText(item))
+    .filter((line): line is string => Boolean(line));
 }
 
 function firstString(record: UnknownRecord, keys: string[]) {
@@ -131,16 +134,29 @@ function findEffectArray(record: UnknownRecord, keys: string[]) {
   return [];
 }
 
+function normalizePassiveEffect(effect: ArkEffectProfile) {
+  const match = effect.description?.match(/^(진화|깨달음|도약)\s*\d?티어\s+(.+?)(?:\s+Lv\.(\d+))?$/);
+  if (!match) return effect;
+  return {
+    ...effect,
+    name: match[2],
+    level: match[3] ? Number(match[3]) : effect.level,
+  };
+}
+
 function gemType(name: string) {
   return ["겁화", "작열", "멸화", "홍염"].find((type) => name.includes(type)) ?? "보석";
 }
 
 function gemTooltipInfo(tooltip?: string) {
-  const text = tooltipText(tooltip);
-  if (!text) return { skill: null, effect: null };
-  const match = text.match(/(.+?)\s+(?:피해량|재사용 대기시간|쿨타임)(?:이|이)?\s*/);
-  if (!match) return { skill: null, effect: text };
-  return { skill: match[1].trim().split(" · ").at(-1) ?? null, effect: text };
+  const lines = tooltipLines(tooltip);
+  if (!lines?.length) return { skill: null, effect: null };
+  const effect = lines.find((line) => /\[[^\]]+\].*(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(line))
+    ?? lines.find((line) => /(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(line))
+    ?? null;
+  if (!effect) return { skill: null, effect: lines.join(" · ") };
+  const match = effect.match(/(?:\[[^\]]+\]\s*)?(.+?)\s+(?:피해량?|재사용 대기시간|쿨타임)/);
+  return { skill: match?.[1].trim() ?? null, effect };
 }
 
 export function mapGems(gems: LostArkGems | LostArkGem[] | null | undefined): GemProfile[] {
@@ -176,13 +192,19 @@ export function mapArkPassive(value: unknown): ArkPassiveProfile {
     })
     .filter((item): item is ArkPointProfile => item !== null);
 
+  const directEvolution = mapArkEffects(findEffectArray(record, ["EvolutionEffects", "Evolution"]), "evolution");
+  const directEnlightenment = mapArkEffects(findEffectArray(record, ["EnlightenmentEffects", "Enlightenment"]), "enlightenment");
+  const directLeap = mapArkEffects(findEffectArray(record, ["LeapEffects", "Leap"]), "leap");
+  const commonEffects = mapArkEffects(findEffectArray(record, ["Effects", "ArkPassiveEffects"]), "effect");
+  const commonByPath = (path: string) => commonEffects.filter((effect) => effect.name === path).map(normalizePassiveEffect);
+
   return {
     isActive: record.IsArkPassive === true || record.IsActive === true,
     points,
-    evolution: mapArkEffects(findEffectArray(record, ["EvolutionEffects", "Evolution"]), "evolution"),
-    enlightenment: mapArkEffects(findEffectArray(record, ["EnlightenmentEffects", "Enlightenment"]), "enlightenment"),
-    leap: mapArkEffects(findEffectArray(record, ["LeapEffects", "Leap"]), "leap"),
-    effects: mapArkEffects(findEffectArray(record, ["Effects", "ArkPassiveEffects"]), "effect"),
+    evolution: directEvolution.length ? directEvolution : commonByPath("진화"),
+    enlightenment: directEnlightenment.length ? directEnlightenment : commonByPath("깨달음"),
+    leap: directLeap.length ? directLeap : commonByPath("도약"),
+    effects: commonEffects.filter((effect) => !["진화", "깨달음", "도약"].includes(effect.name)),
   };
 }
 
