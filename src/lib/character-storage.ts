@@ -10,10 +10,10 @@ export type StoredCharacter = {
   source: CharacterProfile;
   loadout: CharacterProfile;
   savedAt: string;
-  schemaVersion: 2;
+  schemaVersion: 3;
 };
 
-type LegacyStoredCharacter = Omit<StoredCharacter, "schemaVersion"> & { schemaVersion?: 1 };
+type LegacyStoredCharacter = Omit<StoredCharacter, "schemaVersion"> & { schemaVersion?: 1 | 2 };
 
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -40,7 +40,7 @@ export async function saveCharacter(profile: CharacterProfile): Promise<StoredCh
     source: structuredClone(profile),
     loadout: structuredClone(profile),
     savedAt: new Date().toISOString(),
-    schemaVersion: 2,
+    schemaVersion: 3,
   };
   await new Promise<void>((resolve, reject) => {
     const transaction = database.transaction(CHARACTER_STORE, "readwrite");
@@ -65,12 +65,12 @@ export async function loadLatestCharacter(): Promise<StoredCharacter | null> {
   });
   database.close();
   if (!stored) return null;
-  if (stored.schemaVersion === 2) return stored;
+  if (stored.schemaVersion === 3) return stored;
 
   return {
     ...stored,
     source: mapCharacterResponse(stored.source.raw),
     loadout: mapCharacterResponse(stored.loadout.raw),
-    schemaVersion: 2,
+    schemaVersion: 3,
   };
 }

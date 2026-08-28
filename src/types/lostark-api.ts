@@ -42,7 +42,7 @@ export type LostArkGem = { Name?: string; Icon?: string; Level?: number; Grade?:
 
 export type LostArkGems = {
   Gems?: LostArkGem[];
-  Effects?: unknown;
+  Effects?: Array<{ Name?: string; Description?: string; Icon?: string; Tooltip?: string }>;
 };
 
 export type CharacterApiResponse = {

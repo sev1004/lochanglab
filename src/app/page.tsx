@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { mapCharacterResponse, type CharacterProfile } from "@/domain/character/character-mapper";
 import type { EquipmentProfile } from "@/domain/character/equipment-parser";
+import type { ArkEffectProfile, ArkPassiveProfile, ArkGridProfile, GemProfile } from "@/domain/character/character-systems-parser";
 import { loadLatestCharacter, saveCharacter } from "@/lib/character-storage";
 import { fetchCharacter, LostArkApiError } from "@/lib/lostark-api/client";
 
@@ -81,6 +82,57 @@ function AccessoryCard({ item }: { item: EquipmentProfile }) {
         )}
       </div>
     </article>
+  );
+}
+
+function SystemArtwork({ icon, label }: { icon: string | null; label: string }) {
+  return <div className="system-artwork">{icon ? <img src={icon} alt="" /> : <span>{label}</span>}</div>;
+}
+
+function GemCard({ gem }: { gem: GemProfile }) {
+  return (
+    <article className="gem-card">
+      <SystemArtwork icon={gem.icon} label="◆" />
+      <span className="gem-level">{gem.level ?? "-"}</span>
+      <div><strong>{gem.type}</strong><p>{gem.skill ?? gem.name}</p><small>{gem.effect ?? "효과 정보를 불러오지 못했습니다."}</small></div>
+    </article>
+  );
+}
+
+function ArkEffectCard({ effect }: { effect: ArkEffectProfile }) {
+  return (
+    <li className="ark-effect-card">
+      <SystemArtwork icon={effect.icon} label="✦" />
+      <div><strong>{effect.name}</strong><p>{[effect.grade, effect.level === null ? null : `Lv.${effect.level}`].filter(Boolean).join(" · ") || "선택 효과"}</p>{effect.description ? <small>{effect.description}</small> : null}</div>
+    </li>
+  );
+}
+
+function ArkPassivePanel({ arkPassive }: { arkPassive: ArkPassiveProfile }) {
+  const paths = [
+    ["진화", arkPassive.evolution],
+    ["깨달음", arkPassive.enlightenment],
+    ["도약", arkPassive.leap],
+  ] as const;
+  const otherEffects = arkPassive.effects;
+  return (
+    <div className="panel system-panel">
+      <div className="panel-title"><div><h3>아크패시브</h3><p>진화 · 깨달음 · 도약의 현재 포인트와 선택 효과입니다.</p></div><span>{arkPassive.isActive ? "활성" : "정보 없음"}</span></div>
+      {arkPassive.points.length ? <div className="ark-points">{arkPassive.points.map((point) => <div key={point.name}><span>{point.name}</span><strong>{point.value}</strong></div>)}</div> : null}
+      <div className="ark-path-grid">
+        {paths.map(([name, effects]) => <section className="ark-path" key={name}><h4>{name}</h4>{effects.length ? <ul>{effects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul> : <p>선택된 효과가 없습니다.</p>}</section>)}
+      </div>
+      {otherEffects.length ? <div className="ark-extra"><h4>기타 효과</h4><ul>{otherEffects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul></div> : null}
+    </div>
+  );
+}
+
+function ArkGridPanel({ arkGrid }: { arkGrid: ArkGridProfile }) {
+  return (
+    <div className="panel system-panel">
+      <div className="panel-title"><div><h3>아크그리드</h3><p>API에서 조회한 선택 코어를 시뮬레이션 기준값으로 보관합니다.</p></div><span>{arkGrid.effects.length}개</span></div>
+      {arkGrid.effects.length ? <ul className="ark-grid-list">{arkGrid.effects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul> : <p className="empty-copy">표시할 아크그리드 정보가 없습니다.</p>}
+    </div>
   );
 }
 
@@ -176,6 +228,14 @@ export default function Home() {
               <div className="panel-title"><div><h3>악세사리</h3><p>품질, 기본 스탯과 연마·부여 옵션을 표시합니다.</p></div><span>{accessories.length}개</span></div>
               {accessories.length ? <div className="accessory-grid">{accessories.map((item) => <AccessoryCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 악세사리 정보가 없습니다.</p>}
             </div>
+
+            <div className="panel system-panel">
+              <div className="panel-title"><div><h3>보석</h3><p>스킬별 보석 종류, 레벨과 효과를 표시합니다.</p></div><span>{character.gems.length}개</span></div>
+              {character.gems.length ? <div className="gem-grid">{character.gems.map((gem) => <GemCard gem={gem} key={gem.id} />)}</div> : <p className="empty-copy">표시할 보석 정보가 없습니다.</p>}
+            </div>
+
+            <ArkPassivePanel arkPassive={character.arkPassive} />
+            <ArkGridPanel arkGrid={character.arkGrid} />
           </div>
 
           <aside className="side-column">

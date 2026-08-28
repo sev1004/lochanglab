@@ -1,5 +1,13 @@
-import { CharacterApiResponse, LostArkGem } from "@/types/lostark-api";
+import { CharacterApiResponse } from "@/types/lostark-api";
 import { mapEquipment, type EquipmentProfile } from "@/domain/character/equipment-parser";
+import {
+  mapArkGrid,
+  mapArkPassive,
+  mapGems,
+  type ArkGridProfile,
+  type ArkPassiveProfile,
+  type GemProfile,
+} from "@/domain/character/character-systems-parser";
 
 export type CharacterProfile = {
   name: string;
@@ -12,7 +20,9 @@ export type CharacterProfile = {
   equipment: EquipmentProfile[];
   engravings: string[];
   skills: NonNullable<CharacterApiResponse["skills"]>;
-  gems: LostArkGem[];
+  gems: GemProfile[];
+  arkPassive: ArkPassiveProfile;
+  arkGrid: ArkGridProfile;
   raw: CharacterApiResponse;
 };
 
@@ -20,7 +30,6 @@ export function mapCharacterResponse(data: CharacterApiResponse): CharacterProfi
   const profile = data.profile ?? {};
   const stats = (profile.Stats ?? []).map((stat) => [stat.Type ?? "알 수 없음", stat.Value ?? "-"] as [string, string]);
   const engravingItems = data.engravings?.Engravings ?? data.engravings?.ArkPassiveEffects ?? [];
-  const gems = Array.isArray(data.gems) ? data.gems : data.gems?.Gems ?? [];
   return {
     name: profile.CharacterName ?? "이름 없음",
     server: profile.ServerName ?? "서버 미상",
@@ -32,7 +41,9 @@ export function mapCharacterResponse(data: CharacterApiResponse): CharacterProfi
     equipment: mapEquipment(data.equipment ?? []),
     engravings: engravingItems.map((item) => item.Name ?? "이름 없음"),
     skills: data.skills ?? [],
-    gems,
+    gems: mapGems(data.gems),
+    arkPassive: mapArkPassive(data.arkPassive),
+    arkGrid: mapArkGrid(data.arkGrid),
     raw: data,
   };
 }
