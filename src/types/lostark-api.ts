@@ -26,7 +26,14 @@ export type LostArkEquipment = {
 
 export type LostArkEngravings = {
   Engravings?: Array<{ Slot?: number; Name?: string; Description?: string; Icon?: string }>;
-  ArkPassiveEffects?: Array<{ Name?: string; Description?: string; Icon?: string }>;
+  ArkPassiveEffects?: Array<{
+    Name?: string;
+    Description?: string;
+    Icon?: string;
+    Grade?: string;
+    Level?: number;
+    AbilityStoneLevel?: number;
+  }>;
 };
 
 export type LostArkSkill = {
@@ -35,7 +42,10 @@ export type LostArkSkill = {
   Level?: number;
   Type?: string;
   SkillType?: string;
-  Tripods?: Array<{ Tier?: number; Slot?: number; Name?: string; IsSelected?: boolean }>;
+  Tripods?: Array<{ Tier?: number; Slot?: number; Name?: string; IsSelected?: boolean; Level?: number }>;
+  Rune?: { Name?: string; Grade?: string; Icon?: string } | null;
+  IsAwakening?: boolean;
+  Tooltip?: string;
 };
 
 export type LostArkGem = { Name?: string; Icon?: string; Level?: number; Grade?: string; Type?: string; Tooltip?: string };

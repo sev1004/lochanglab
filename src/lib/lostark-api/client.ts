@@ -24,9 +24,22 @@ async function request<T>(path: string, apiKey: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function optionalRequest<T>(path: string, apiKey: string, fallback: T): Promise<T> {
+  try {
+    return await request<T>(path, apiKey);
+  } catch (error) {
+    if (error instanceof LostArkApiError && [404, 500, 503].includes(error.status)) return fallback;
+    throw error;
+  }
+}
+
 export async function fetchCharacter(characterName: string, apiKey: string): Promise<CharacterApiResponse> {
   const encodedName = encodeURIComponent(characterName);
   const armory = await request<LostArkArmoryResponse>(`/armories/characters/${encodedName}`, apiKey);
+  const [arkPassive, arkGrid] = await Promise.all([
+    optionalRequest(`/armories/characters/${encodedName}/arkpassive`, apiKey, armory.ArkPassive),
+    optionalRequest(`/armories/characters/${encodedName}/arkgrid`, apiKey, armory.ArkGrid),
+  ]);
   return {
     profile: armory.ArmoryProfile ?? undefined,
     equipment: armory.ArmoryEquipment ?? undefined,
@@ -35,7 +48,7 @@ export async function fetchCharacter(characterName: string, apiKey: string): Pro
     gems: armory.ArmoryGem ?? undefined,
     cards: armory.ArmoryCard,
     avatars: armory.ArmoryAvatars,
-    arkPassive: armory.ArkPassive,
-    arkGrid: armory.ArkGrid,
+    arkPassive,
+    arkGrid,
   };
 }

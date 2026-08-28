@@ -1,0 +1,26 @@
+.equipment-layout { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.05fr); gap:12px; align-items:start; }
+.equipment-column { display:grid; gap:12px; }
+.equipment-section { padding:16px; background:var(--surface2); border:1px solid var(--line); border-radius:5px; }
+.equipment-section h2 { margin:0 0 11px; font-size:14px; }
+.equipment-edit-grid { display:grid; gap:7px; }
+.gear-editor { display:flex; gap:7px; min-height:60px; padding:0; background:transparent; }
+.quality-art { position:relative; flex:0 0 52px; align-self:flex-start; }
+.quality-art .compact-art { width:52px; height:52px; }
+.quality-art > span:last-child { position:absolute; right:0; bottom:0; left:0; padding:2px 0; color:#0b1320; font:700 8px "DM Mono"; text-align:center; white-space:nowrap; }
+.quality-gold { background:#e2af22; }.quality-purple { background:#bc9dff; }.quality-sky { background:#81d3f4; }
+.gear-fields { display:grid; align-content:start; gap:5px; min-width:0; }
+.gear-fields > small { color:#92a6c4; font:10px "DM Mono"; }
+.gear-fields > div { display:flex; gap:5px; }
+.gear-fields label { display:flex; align-items:center; gap:4px; color:#8995a6; font-size:9px; white-space:nowrap; }
+.gear-fields select,.accessory-fields select,.accessory-fields input,.stone-editor select,.bracelet-editor select,.engraving-editor select,.passive-row select,.core-grid select,.gem-editor select { min-width:0; height:27px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
+.gear-fields > div > select { width:82px; }.gear-fields label select { width:55px; }
+.avatar-section { margin-top:0; }.avatar-table { width:100%; padding:6px 8px; background:#101722; }
+.avatar-table > div { display:grid; grid-template-columns:55px repeat(4,1fr); align-items:center; min-height:30px; border-bottom:1px solid #273140; text-align:center; }
+.avatar-table > div:last-child { border-bottom:0; }.avatar-table span,.avatar-table strong { font-size:9px; }.avatar-table input { position:absolute; opacity:0; pointer-events:none; }.avatar-table label { display:grid; place-items:center; }.avatar-table i { display:block; width:13px; height:13px; border:1px solid #66768b; border-radius:50%; }.avatar-table input:checked + i { border:4px solid #80e7bd; }
+.accessory-edit-grid { display:grid; gap:8px; }.accessory-editor { display:flex; gap:8px; padding:0; background:transparent; }.accessory-fields { display:grid; flex:1; gap:5px; min-width:0; }.accessory-fields > div:first-child { display:flex; gap:5px; }.accessory-fields > div:first-child select { width:76px; }.accessory-fields input { width:70px; }.accessory-option-list { display:grid; gap:4px; }.accessory-option-list select { width:100%; }
+.stone-editor,.bracelet-editor { display:flex; gap:8px; padding:0; background:transparent; }.stone-editor > div,.bracelet-editor > div { display:grid; flex:1; gap:5px; min-width:0; }.stone-row { display:grid; grid-template-columns:1fr 50px; gap:5px; }.bracelet-editor > div > select { width:80px; }.bracelet-option-list { display:grid; gap:4px; }.bracelet-option-list select { width:100%; }
+.engraving-section { grid-column:1 / -1; }.engraving-editor { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }.engraving-editor > div { display:grid; grid-template-columns:32px minmax(0,1fr); gap:6px; align-items:center; padding:8px; background:#101722; }.engraving-editor .compact-art { width:32px; height:32px; }.engraving-card-content { min-width:0; }.engraving-controls { display:grid; grid-template-columns:1fr 48px; gap:4px; }.engraving-card-content > select { width:100%; margin-top:5px; }
+.passive-editor { padding:11px; background:#101722; }.passive-editor h3 { margin-bottom:8px; font-size:12px; }.passive-row { display:grid; grid-template-columns:1fr 70px; gap:5px; margin-top:5px; }.core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }.core-grid article { display:grid; grid-template-columns:38px 1fr 70px 58px 42px; align-items:center; gap:5px; padding:8px; background:#101722; }.core-grid b { color:#80e7bd; font:500 10px "DM Mono"; }
+.skill-editor .skill-gems { flex-wrap:wrap; justify-content:flex-end; max-width:420px; }.gem-editor { display:grid; grid-template-columns:30px 62px 58px 22px; align-items:center; gap:3px; }.gem-editor .compact-art { width:30px; height:30px; }.gem-editor button,.gem-add-button { height:30px; padding:0 7px; background:#243244; color:#d7e2ef; }.gem-add-button:disabled { cursor:not-allowed; opacity:.35; }.limit-reached,.validation-message { color:#ff9e9e!important; }.validation-message { margin:-4px 0 10px; font-size:10px; }
+@media (max-width:900px) { .equipment-layout { grid-template-columns:1fr; }.engraving-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }.core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.core-grid article { grid-template-columns:38px 1fr 64px 54px 38px; } }
+@media (max-width:600px) { .engraving-editor,.core-grid { grid-template-columns:1fr; }.skill-editor .skill-gems { justify-content:flex-start; max-width:none; } }

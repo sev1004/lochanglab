@@ -1,287 +1,103 @@
 "use client";
 
-import { FormEvent, useEffect, useState } from "react";
-import { mapCharacterResponse, type CharacterProfile } from "@/domain/character/character-mapper";
+import { FormEvent, useEffect, useMemo, useState } from "react";
+import { mapCharacterResponse, type CharacterProfile, type EngravingProfile } from "@/domain/character/character-mapper";
 import type { EquipmentProfile } from "@/domain/character/equipment-parser";
-import type { ArkEffectProfile, ArkPassiveProfile, ArkGridProfile, GemProfile } from "@/domain/character/character-systems-parser";
+import { GLAVIER_ORDER_CORE_OPTIONS, type ArkEffectProfile, type ArkGridCoreProfile, type GemProfile, type SkillProfile } from "@/domain/character/character-systems-parser";
 import { loadLatestCharacter, saveCharacter } from "@/lib/character-storage";
 import { fetchCharacter, LostArkApiError } from "@/lib/lostark-api/client";
+import { ENGRAVING_NAMES, engravingIcon } from "@/data/engraving-catalog";
 
-const errorMessages: Record<number, string> = {
-  401: "API 키가 올바르지 않습니다.",
-  403: "API 접근 권한이 없습니다.",
-  404: "캐릭터를 찾을 수 없습니다.",
-  429: "API 요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
-  500: "로스트아크 API에서 오류가 발생했습니다.",
-  503: "로스트아크 API가 점검 중입니다.",
+type MainMenu = "simulation" | "comparison" | "api";
+type SimulationTab = "전체" | "기본 장비" | "아크 패시브 & 그리드" | "스킬 & 전투 사이클";
+type SavedSetting = { id: string; name: string; cycle: string[]; itemLevel: string; attackPower: string; savedAt: string };
+type StoneEffect = { engraving: string; level: number };
+type PassiveGroup = "evolution" | "enlightenment" | "leap";
+
+const errors: Record<number, string> = { 401: "API 키가 올바르지 않습니다.", 403: "API 접근 권한이 없습니다.", 404: "캐릭터를 찾을 수 없습니다.", 429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요." };
+const simTabs: SimulationTab[] = ["전체", "기본 장비", "아크 패시브 & 그리드", "스킬 & 전투 사이클"];
+const SAVED_SETTINGS_KEY = "glavier-dps-simulator:saved-settings";
+const gearGrades = ["T4 전율", "T4 고대", "T4 유물"] as const;
+const armGauntletGrades = ["영웅", "전설", "유물", "고대"] as const;
+const enhancementLevels = Array.from({ length: 16 }, (_, index) => 25 - index);
+const gemLevels = Array.from({ length: 10 }, (_, index) => 10 - index);
+const gemTypes = ["겁화", "작열", "멸화", "홍염"];
+const avatarSlots = ["무기", "머리", "상의", "하의"] as const;
+const accessoryOptions = ["없음", "추가 피해 +0.70%", "추가 피해 +1.60%", "추가 피해 +2.60%", "적에게 주는 피해 +0.55%", "적에게 주는 피해 +1.20%", "적에게 주는 피해 +2.00%", "무기 공격력 +0.80%", "무기 공격력 +1.80%", "무기 공격력 +3.00%", "공격력 +0.40%", "공격력 +0.95%", "공격력 +1.55%", "치명타 적중률 +0.40%", "치명타 적중률 +0.95%", "치명타 적중률 +1.55%", "치명타 피해 +1.10%", "치명타 피해 +2.40%", "치명타 피해 +4.00%", "무기 공격력 +195", "무기 공격력 +480", "무기 공격력 +960", "공격력 +80", "공격력 +195", "공격력 +390"];
+const braceletOptions = ["없음", "힘 +75", "민첩 +75", "지능 +75", "치명 +108", "특화 +108", "신속 +108", "추가 피해 +4.00%", "치명타 적중률 +0.95%", "공격력 +390", "무기 공격력 +960"];
+const passiveCatalog: Record<PassiveGroup, string[]> = {
+  evolution: ["없음", "치명", "특화", "신속", "한계 돌파", "최적화 훈련", "예리한 감각", "끝없는 마나", "무한한 마력", "음속 돌파", "뭉툭한 가시", "입식 타격가", "마나 용광로"],
+  enlightenment: ["없음", "절정", "절제", "연가심공", "청룡진", "난무 강화", "집중 강화"],
+  leap: ["없음", "초월적인 힘", "풀려난 힘", "즉각적인 주문", "잠재력 해방"],
 };
+const gridCoreOptions = [...GLAVIER_ORDER_CORE_OPTIONS.map((options) => ["없음", ...options]), ["없음", "현란한 공격", "안정적인 공격", "재빠른 공격", "신념의 강화", "흐르는 마나", "불굴의 강화"], ["없음", "불타는 일격", "흡수의 일격", "부수는 일격", "낙인의 흔적", "강철의 흔적", "치명적인 흔적"], ["없음", "공격", "무기", "구원", "생명", "속도", "방어"]];
+const gridPoints = [20, 19, 18, 17, 14, 10];
 
-function getErrorMessage(error: unknown) {
-  if (error instanceof LostArkApiError) return errorMessages[error.status] ?? `로스트아크 API 요청에 실패했습니다. (${error.status})`;
-  if (error instanceof TypeError) return "로스트아크 API에 연결하지 못했습니다. 네트워크와 브라우저 설정을 확인해주세요.";
-  return error instanceof Error ? error.message : "캐릭터 조회에 실패했습니다.";
+function errorMessage(error: unknown) { if (error instanceof LostArkApiError) return errors[error.status] ?? `로스트아크 API 요청에 실패했습니다. (${error.status})`; return error instanceof TypeError ? "로스트아크 API에 연결하지 못했습니다. 네트워크와 브라우저 설정을 확인해주세요." : "캐릭터 조회에 실패했습니다."; }
+function Artwork({ icon, label }: { icon: string | null; label: string }) { return <span className="compact-art">{icon ? <img src={icon} alt="" /> : label}</span>; }
+function qualityTone(quality: number | null) { return quality === 100 ? "quality-gold" : quality !== null && quality >= 90 ? "quality-purple" : "quality-sky"; }
+function baseStatValue(item: EquipmentProfile) { return item.baseStats[0]?.match(/[\d,]+/)?.[0]?.replaceAll(",", "") ?? ""; }
+function optionChoices(current: string, catalog: string[]) { return [...new Set([current, ...catalog])]; }
+
+function GearEditor({ item, onChange }: { item: EquipmentProfile; onChange: (patch: Partial<EquipmentProfile>) => void }) {
+  const isArmGauntlet = item.slot === "완갑";
+  const grades = isArmGauntlet ? armGauntletGrades : gearGrades;
+  return <article className="gear-editor">
+    <div className="quality-art"><Artwork icon={item.icon} label="◇" /><span className={qualityTone(item.quality)}>품질 {item.quality ?? "-"}</span></div>
+    <div className="gear-fields"><small>{item.itemLevel ?? "-"}</small><div><select aria-label={`${item.slot} 등급`} value={item.simulationGrade} onChange={(event) => onChange({ simulationGrade: event.target.value as EquipmentProfile["simulationGrade"] })}>{grades.map((grade) => <option key={grade}>{grade}</option>)}</select>{!isArmGauntlet ? <label>강화<select aria-label={`${item.slot} 강화`} value={item.enhancement ?? 10} onChange={(event) => onChange({ enhancement: Number(event.target.value) })}>{enhancementLevels.map((level) => <option value={level} key={level}>+{level}</option>)}</select></label> : <label>강화<select aria-label={`${item.slot} 강화`} value={item.enhancement ?? 10} onChange={(event) => onChange({ enhancement: Number(event.target.value) })}>{enhancementLevels.map((level) => <option value={level} key={level}>+{level}</option>)}</select></label>}</div></div>
+  </article>;
 }
 
-function qualityTone(quality: number | null) {
-  if (quality === null) return "quality-none";
-  if (quality >= 90) return "quality-high";
-  if (quality >= 70) return "quality-mid";
-  return "quality-low";
+function AccessoryEditor({ item, onChange }: { item: EquipmentProfile; onChange: (patch: Partial<EquipmentProfile>) => void }) {
+  const options = Array.from({ length: 3 }, (_, index) => item.options[index] ?? "없음");
+  return <article className="accessory-editor"><div className="quality-art"><Artwork icon={item.icon} label="◇" /><span className={qualityTone(item.quality)}>{item.quality ?? "-"}%</span></div><div className="accessory-fields"><div><select aria-label={`${item.slot} 등급`} value={item.simulationGrade === "T4 전율" ? "T4 고대" : item.simulationGrade} onChange={(event) => onChange({ simulationGrade: event.target.value as EquipmentProfile["simulationGrade"] })}><option>T4 고대</option><option>T4 유물</option></select><input aria-label={`${item.slot} 힘민지`} type="number" min="0" value={baseStatValue(item)} onChange={(event) => onChange({ baseStats: [event.target.value] })} /></div><div className="accessory-option-list">{options.map((option, index) => <select aria-label={`${item.slot} 옵션 ${index + 1}`} value={option} onChange={(event) => { const next = [...options]; next[index] = event.target.value; onChange({ options: next }); }} key={index}>{optionChoices(option, accessoryOptions).map((value) => <option value={value} key={value}>{value}</option>)}</select>)}</div></div></article>;
 }
 
-function ItemArtwork({ item }: { item: EquipmentProfile }) {
-  return (
-    <div className="item-artwork">
-      {item.icon ? <img src={item.icon} alt={`${item.slot} 아이템`} /> : <span>◇</span>}
-      {item.tier ? <em>{item.tier}T</em> : null}
-    </div>
-  );
+function StoneEditor({ icon, effects, engravingNames, onChange }: { icon: string | null; effects: StoneEffect[]; engravingNames: string[]; onChange: (index: number, patch: Partial<StoneEffect>) => void }) {
+  return <article className="stone-editor"><Artwork icon={icon} label="◇" /><div>{effects.map((effect, index) => <div className="stone-row" key={index}><select aria-label={`어빌리티 스톤 각인 ${index + 1}`} value={effect.engraving} onChange={(event) => onChange(index, { engraving: event.target.value })}>{engravingNames.map((name) => <option key={name}>{name}</option>)}</select><select aria-label={`어빌리티 스톤 레벨 ${index + 1}`} value={effect.level} onChange={(event) => onChange(index, { level: Number(event.target.value) })}>{[1, 2, 3, 4].map((level) => <option value={level} key={level}>+{level}</option>)}</select></div>)}</div></article>;
 }
 
-function GearCard({ item }: { item: EquipmentProfile }) {
-  return (
-    <article className="gear-card">
-      <ItemArtwork item={item} />
-      <div className="item-content">
-        <div className="item-heading">
-          <span className="slot-label">{item.slot}</span>
-          <span className="grade-label">{item.tier ? `T${item.tier} ` : ""}{item.grade}</span>
-        </div>
-        <strong className="item-name">{item.name}</strong>
-        <div className="gear-values">
-          <span className={qualityTone(item.quality)}><small>품질</small>{item.quality ?? "-"}</span>
-          <span><small>아이템 레벨</small>{item.itemLevel ?? "-"}</span>
-          <span><small>일반 재련</small>{item.enhancement === null ? "-" : `+${item.enhancement}`}</span>
-          <span><small>상급 재련</small>{item.advancedHoning === null ? "-" : `X${item.advancedHoning}`}</span>
-        </div>
-      </div>
-    </article>
-  );
+function BraceletEditor({ item, onChange }: { item: EquipmentProfile | null; onChange: (patch: Partial<EquipmentProfile>) => void }) {
+  if (!item) return <p className="empty-copy">정보 없음</p>;
+  const options = Array.from({ length: 3 }, (_, index) => item.options[index] ?? "없음");
+  return <article className="bracelet-editor"><div className="quality-art"><Artwork icon={item.icon} label="◇" /><span className={qualityTone(item.quality)}>{item.quality ?? "-"}%</span></div><div><select aria-label="팔찌 등급" value={item.simulationGrade === "T4 전율" ? "T4 고대" : item.simulationGrade} onChange={(event) => onChange({ simulationGrade: event.target.value as EquipmentProfile["simulationGrade"] })}><option>T4 고대</option><option>T4 유물</option></select><div className="bracelet-option-list">{options.map((option, index) => <select aria-label={`팔찌 옵션 ${index + 1}`} value={option} onChange={(event) => { const next = [...options]; next[index] = event.target.value; onChange({ options: next }); }} key={index}>{optionChoices(option, braceletOptions).map((value) => <option value={value} key={value}>{value}</option>)}</select>)}</div></div></article>;
 }
 
-function AccessoryCard({ item }: { item: EquipmentProfile }) {
-  return (
-    <article className="accessory-card">
-      <ItemArtwork item={item} />
-      <div className="item-content">
-        <div className="item-heading">
-          <span className="slot-label">{item.slot}</span>
-          <span className="grade-label">{item.tier ? `T${item.tier} ` : ""}{item.grade}</span>
-        </div>
-        <strong className="item-name">{item.name}</strong>
-        <div className="accessory-meta">
-          <span className={qualityTone(item.quality)}>품질 {item.quality ?? "-"}</span>
-          {item.baseStats.map((stat) => <span key={stat}>{stat}</span>)}
-        </div>
-        {item.options.length ? (
-          <ul className="option-list">
-            {item.options.map((option, index) => <li key={`${option}-${index}`}>{option}</li>)}
-          </ul>
-        ) : (
-          <p className="option-empty">표시 가능한 연마·부여 옵션이 없습니다.</p>
-        )}
-      </div>
-    </article>
-  );
-}
-
-function SystemArtwork({ icon, label }: { icon: string | null; label: string }) {
-  return <div className="system-artwork">{icon ? <img src={icon} alt="" /> : <span>{label}</span>}</div>;
-}
-
-function GemCard({ gem }: { gem: GemProfile }) {
-  return (
-    <article className="gem-card">
-      <SystemArtwork icon={gem.icon} label="◆" />
-      <span className="gem-level">{gem.level ?? "-"}</span>
-      <div><strong>{gem.type}</strong><p>{gem.skill ?? gem.name}</p><small>{gem.effect ?? "효과 정보를 불러오지 못했습니다."}</small></div>
-    </article>
-  );
-}
-
-function ArkEffectCard({ effect }: { effect: ArkEffectProfile }) {
-  return (
-    <li className="ark-effect-card">
-      <SystemArtwork icon={effect.icon} label="✦" />
-      <div><strong>{effect.name}</strong><p>{[effect.grade, effect.level === null ? null : `Lv.${effect.level}`].filter(Boolean).join(" · ") || "선택 효과"}</p>{effect.description ? <small>{effect.description}</small> : null}</div>
-    </li>
-  );
-}
-
-function ArkPassivePanel({ arkPassive }: { arkPassive: ArkPassiveProfile }) {
-  const paths = [
-    ["진화", arkPassive.evolution],
-    ["깨달음", arkPassive.enlightenment],
-    ["도약", arkPassive.leap],
-  ] as const;
-  const otherEffects = arkPassive.effects;
-  return (
-    <div className="panel system-panel">
-      <div className="panel-title"><div><h3>아크패시브</h3><p>진화 · 깨달음 · 도약의 현재 포인트와 선택 효과입니다.</p></div><span>{arkPassive.isActive ? "활성" : "정보 없음"}</span></div>
-      {arkPassive.points.length ? <div className="ark-points">{arkPassive.points.map((point) => <div key={point.name}><span>{point.name}</span><strong>{point.value}</strong></div>)}</div> : null}
-      <div className="ark-path-grid">
-        {paths.map(([name, effects]) => <section className="ark-path" key={name}><h4>{name}</h4>{effects.length ? <ul>{effects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul> : <p>선택된 효과가 없습니다.</p>}</section>)}
-      </div>
-      {otherEffects.length ? <div className="ark-extra"><h4>기타 효과</h4><ul>{otherEffects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul></div> : null}
-    </div>
-  );
-}
-
-function ArkGridPanel({ arkGrid }: { arkGrid: ArkGridProfile }) {
-  return (
-    <div className="panel system-panel">
-      <div className="panel-title"><div><h3>아크그리드</h3><p>API에서 조회한 선택 코어를 시뮬레이션 기준값으로 보관합니다.</p></div><span>{arkGrid.effects.length}개</span></div>
-      {arkGrid.effects.length ? <ul className="ark-grid-list">{arkGrid.effects.map((effect) => <ArkEffectCard effect={effect} key={effect.id} />)}</ul> : <p className="empty-copy">표시할 아크그리드 정보가 없습니다.</p>}
-    </div>
-  );
-}
-
-type SimulatorTab = "전체" | "보석" | "장비 및 악세사리" | "각인" | "아크패시브" | "아크그리드";
-
-const simulatorTabs: SimulatorTab[] = ["전체", "보석", "장비 및 악세사리", "각인", "아크패시브", "아크그리드"];
-
-function OverviewPanel({ character, gear, accessories }: { character: CharacterProfile; gear: EquipmentProfile[]; accessories: EquipmentProfile[] }) {
-  const summaries = [
-    ["전투 장비", `${gear.length}개`, "품질 · 재련"],
-    ["악세사리", `${accessories.length}개`, "연마 옵션"],
-    ["보석", `${character.gems.length}개`, "스킬 효과"],
-    ["아크패시브", `${character.arkPassive.points.length}종`, character.arkPassive.isActive ? "활성" : "미확인"],
-    ["아크그리드", `${character.arkGrid.effects.length}개`, "선택 코어"],
-    ["각인", `${character.engravings.length}개`, character.engravings.slice(0, 2).join(" · ") || "미확인"],
-  ];
-  return <div className="overview-grid">{summaries.map(([label, value, detail]) => <article className="overview-card" key={label}><span>{label}</span><strong>{value}</strong><small>{detail}</small></article>)}</div>;
-}
-
-function EquipmentPanels({ gear, accessories }: { gear: EquipmentProfile[]; accessories: EquipmentProfile[] }) {
-  return <div className="tab-panels">
-    <div className="panel equipment-panel">
-      <div className="panel-title"><div><h3>전투 장비</h3><p>DPS 계산에 사용하는 장비만 표시합니다.</p></div><span>{gear.length}개</span></div>
-      {gear.length ? <div className="gear-grid">{gear.map((item) => <GearCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 전투 장비 정보가 없습니다.</p>}
-    </div>
-    <div className="panel equipment-panel">
-      <div className="panel-title"><div><h3>악세사리</h3><p>품질, 기본 스탯과 연마·부여 옵션을 표시합니다.</p></div><span>{accessories.length}개</span></div>
-      {accessories.length ? <div className="accessory-grid">{accessories.map((item) => <AccessoryCard item={item} key={item.id} />)}</div> : <p className="empty-copy">표시할 악세사리 정보가 없습니다.</p>}
-    </div>
-  </div>;
-}
-
-function GemPanel({ gems }: { gems: GemProfile[] }) {
-  return <div className="panel system-panel">
-    <div className="panel-title"><div><h3>보석</h3><p>스킬별 보석 종류, 레벨과 효과를 표시합니다.</p></div><span>{gems.length}개</span></div>
-    {gems.length ? <div className="gem-grid">{gems.map((gem) => <GemCard gem={gem} key={gem.id} />)}</div> : <p className="empty-copy">표시할 보석 정보가 없습니다.</p>}
-  </div>;
-}
-
-function EngravingPanel({ engravings }: { engravings: string[] }) {
-  return <div className="panel engraving-panel">
-    <div className="panel-title"><div><h3>각인</h3><p>현재 캐릭터에 적용된 각인입니다.</p></div><span>{engravings.length}개</span></div>
-    {engravings.length ? <ul className="engraving-list">{engravings.map((item, index) => <li key={`${item}-${index}`}><span>◆</span>{item}</li>)}</ul> : <p className="empty-copy">표시할 각인 정보가 없습니다.</p>}
-  </div>;
-}
+function GemEditor({ gem, onChange, onRemove }: { gem: GemProfile; onChange: (patch: Partial<GemProfile>) => void; onRemove: () => void }) { return <span className="gem-editor"><Artwork icon={gem.icon} label="◆" /><select aria-label="보석 종류" value={gem.type} onChange={(event) => onChange({ type: event.target.value, name: `${event.target.value} 보석` })}>{gemTypes.map((type) => <option key={type}>{type}</option>)}</select><select aria-label="보석 레벨" value={gem.level ?? 10} onChange={(event) => onChange({ level: Number(event.target.value) })}>{gemLevels.map((level) => <option value={level} key={level}>Lv.{level}</option>)}</select><button type="button" onClick={onRemove} aria-label="보석 제거">×</button></span>; }
+function SkillEditor({ skill, gems, canAdd, onAdd, onChange, onRemove }: { skill: SkillProfile; gems: GemProfile[]; canAdd: boolean; onAdd: () => void; onChange: (id: string, patch: Partial<GemProfile>) => void; onRemove: (id: string) => void }) { return <article className="skill-card skill-editor"><Artwork icon={skill.icon} label="✦" /><div className="skill-detail"><strong>{skill.name}</strong><span>Lv.{skill.level} · {skill.type}</span><p>{skill.tripods.map((tripod) => `${tripod.name}${tripod.level ? ` ${tripod.level}` : ""}`).join(" · ") || "트라이포드 정보 없음"}</p><small>{skill.rune ? `${skill.rune} 룬` : "룬 없음"}</small></div><div className="skill-gems">{gems.map((gem) => <GemEditor gem={gem} onChange={(patch) => onChange(gem.id, patch)} onRemove={() => onRemove(gem.id)} key={gem.id} />)}<button type="button" className="gem-add-button" onClick={onAdd} disabled={!canAdd}>+ 보석</button></div></article>; }
+function EffectList({ effects }: { effects: ArkEffectProfile[] }) { return <ul className="effect-list">{effects.map((effect) => <li key={effect.id}><Artwork icon={effect.icon} label="✦" /><div><strong>{effect.name}</strong><small>{effect.level === null ? effect.description : `Lv.${effect.level} · ${effect.description ?? ""}`}</small></div></li>)}</ul>; }
+function PassiveEditor({ title, group, effects, onChange }: { title: string; group: PassiveGroup; effects: ArkEffectProfile[]; onChange: (index: number, patch: Partial<ArkEffectProfile>) => void }) { const rows = effects.length ? effects : [{ id: `${group}-empty`, name: "없음", level: 0, grade: null, icon: null, description: null }]; const choices = [...new Set([...passiveCatalog[group], ...effects.map((effect) => effect.name)])]; return <section className="passive-editor"><h3>{title}</h3>{rows.map((effect, index) => <div className="passive-row" key={effect.id}><select value={effect.name} onChange={(event) => onChange(index, { name: event.target.value })}>{choices.map((choice) => <option key={choice}>{choice}</option>)}</select><select value={effect.level ?? 0} onChange={(event) => onChange(index, { level: Number(event.target.value) })}>{Array.from({ length: 7 }, (_, level) => <option value={level} key={level}>Lv.{level}</option>)}</select></div>)}</section>; }
+function coreLevel(point: number | null) { return point === null ? null : point >= 20 ? 3 : point >= 17 ? 2 : point >= 14 ? 1 : 0; }
+function deriveGridShorthand(cores: ArkGridCoreProfile[]) { const indexes = cores.slice(0, 3).map((core, index) => GLAVIER_ORDER_CORE_OPTIONS[index]?.findIndex((option) => option === core.name) ?? -1); return indexes.length === 3 && indexes.every((index) => index >= 0) ? indexes.map((index) => index + 1).join("") : null; }
+function deriveBuildName(character: CharacterProfile) { const text = character.arkPassive.enlightenment.map((effect) => `${effect.name} ${effect.description ?? ""}`).join(" "); const identity = text.includes("절제") ? "절제" : text.includes("절정") ? "절정" : character.buildName.split(" ")[0]; const shorthand = deriveGridShorthand(character.arkGrid.cores) ?? character.arkGrid.shorthand; return `${identity}${shorthand ? ` ${shorthand}` : ""}`; }
+function initialStoneEffects(profile: CharacterProfile): StoneEffect[] { const active = profile.engravingDetails.filter((engraving) => engraving.abilityStoneLevel > 0).slice(0, 2); return (active.length ? active : profile.engravingDetails.slice(0, 2)).map((engraving) => ({ engraving: engraving.name, level: engraving.abilityStoneLevel || 1 })); }
+function initialAvatarGrades(profile: CharacterProfile) { return Object.fromEntries(avatarSlots.map((slot) => { const avatar = profile.avatars.find((item) => item.slot.includes(slot) || (slot === "머리" && item.slot.includes("투구"))); return [slot, avatar?.grade === "전설" ? "전설" : avatar ? "영웅" : "없음"]; })) as Record<(typeof avatarSlots)[number], string>; }
 
 export default function Home() {
-  const [apiKey, setApiKey] = useState("");
-  const [characterName, setCharacterName] = useState("");
-  const [character, setCharacter] = useState<CharacterProfile | null>(null);
-  const [activeTab, setActiveTab] = useState<SimulatorTab>("전체");
-  const [isSearching, setIsSearching] = useState(false);
-  const [message, setMessage] = useState("로스트아크 API 키와 캐릭터명을 입력해주세요.");
+  const [menu, setMenu] = useState<MainMenu>("simulation"); const [tab, setTab] = useState<SimulationTab>("전체"); const [apiKey, setApiKey] = useState(""); const [characterName, setCharacterName] = useState(""); const [character, setCharacter] = useState<CharacterProfile | null>(null); const [message, setMessage] = useState("API 설정에서 API 키를 입력한 뒤 캐릭터를 조회하세요."); const [searching, setSearching] = useState(false); const [cycle, setCycle] = useState<string[]>([]); const [cycleSkill, setCycleSkill] = useState(""); const [savedSettings, setSavedSettings] = useState<SavedSetting[]>([]); const [gems, setGems] = useState<GemProfile[]>([]); const [gemMessage, setGemMessage] = useState(""); const [stoneEffects, setStoneEffects] = useState<StoneEffect[]>([]); const [avatarGrades, setAvatarGrades] = useState<Record<string, string>>({});
+  function applyProfile(profile: CharacterProfile) { setCharacter(profile); setCharacterName(profile.name); setGems(profile.gems); setStoneEffects(initialStoneEffects(profile)); setAvatarGrades(initialAvatarGrades(profile)); setGemMessage(""); }
+  useEffect(() => { loadLatestCharacter().then((stored) => { if (stored) { applyProfile(stored.source); setMessage(`${stored.source.name}의 저장된 정보를 복원했습니다.`); } }).catch(() => undefined); }, []);
+  useEffect(() => { try { const saved = localStorage.getItem(SAVED_SETTINGS_KEY); if (saved) setSavedSettings(JSON.parse(saved) as SavedSetting[]); } catch { /* 복원 실패는 무시한다. */ } }, []);
+  const gear = character?.equipment.filter((item) => item.category === "gear") ?? []; const accessories = character?.equipment.filter((item) => ["목걸이", "귀걸이", "반지"].includes(item.slot)) ?? []; const stone = character?.equipment.find((item) => item.slot === "어빌리티 스톤") ?? null; const bracelet = character?.equipment.find((item) => item.slot === "팔찌") ?? null; const cycleSkills = useMemo(() => character?.skills.filter((skill) => skill.level > 0) ?? [], [character]); const engravingNames = ENGRAVING_NAMES;
+  const item = bracelet ?? { id: "" };
+  async function search(event: FormEvent<HTMLFormElement>) { event.preventDefault(); if (!apiKey.trim()) { setMenu("api"); setMessage("먼저 API 설정에서 키를 입력해주세요."); return; } if (!characterName.trim()) { setMessage("캐릭터명을 입력해주세요."); return; } setSearching(true); setMessage("로스트아크 API에서 캐릭터 정보를 불러오는 중입니다..."); try { const profile = mapCharacterResponse(await fetchCharacter(characterName.trim(), apiKey.trim())); applyProfile(profile); setCycle([]); await saveCharacter(profile); setMessage("캐릭터 정보와 현재 세팅을 불러왔습니다."); } catch (error) { setMessage(errorMessage(error)); } finally { setSearching(false); } }
+  function updateEquipment(id: string, patch: Partial<EquipmentProfile>) { setCharacter((current) => current ? { ...current, equipment: current.equipment.map((item) => item.id === id ? { ...item, ...patch } : item) } : current); }
+  function updateEngraving(index: number, patch: Partial<EngravingProfile>) { setCharacter((current) => { if (!current) return current; const details = current.engravingDetails.map((engraving, itemIndex) => itemIndex === index ? { ...engraving, ...patch, icon: patch.name ? engravingIcon(patch.name) : engraving.icon } : engraving); return { ...current, engravingDetails: details, engravings: details.map((engraving) => engraving.name) }; }); }
+  function updatePassive(group: PassiveGroup, index: number, patch: Partial<ArkEffectProfile>) { setCharacter((current) => { if (!current) return current; const effects = [...current.arkPassive[group]]; if (!effects[index]) effects[index] = { id: `${group}-${index}`, name: "없음", level: 0, grade: null, icon: null, description: null }; effects[index] = { ...effects[index], ...patch }; return { ...current, arkPassive: { ...current.arkPassive, [group]: effects } }; }); }
+  function updateCore(index: number, patch: Partial<ArkGridCoreProfile>) { setCharacter((current) => { if (!current) return current; const cores = current.arkGrid.cores.map((core, coreIndex) => coreIndex === index ? { ...core, ...patch } : core); return { ...current, arkGrid: { ...current.arkGrid, cores, shorthand: deriveGridShorthand(cores) } }; }); }
+  function addGem(skill: SkillProfile) { if (gems.length >= 11) { setGemMessage("보석은 최대 11개까지만 선택할 수 있습니다."); return; } setGems((current) => [...current, { id: `custom-${crypto.randomUUID()}`, name: "겁화 보석", type: "겁화", level: 10, grade: "고대", icon: null, skill: skill.name, effect: null }]); setGemMessage(""); }
+  function updateGem(id: string, patch: Partial<GemProfile>) { setGems((current) => current.map((gem) => gem.id === id ? { ...gem, ...patch } : gem)); }
+  function saveSetting() { if (!character) return; setSavedSettings((value) => { const next = [...value, { id: crypto.randomUUID(), name: `${character.name} 세팅 ${value.length + 1}`, cycle, itemLevel: character.level, attackPower: character.combat.attackPower, savedAt: new Date().toLocaleString("ko-KR") }]; localStorage.setItem(SAVED_SETTINGS_KEY, JSON.stringify(next)); return next; }); }
 
-  useEffect(() => {
-    loadLatestCharacter()
-      .then((stored) => {
-        if (!stored) return;
-        setCharacter(stored.source);
-        setCharacterName(stored.source.name);
-        setMessage(`${stored.source.name}의 저장된 정보를 복원했습니다. 최신 정보는 API 키를 입력해 다시 조회하세요.`);
-      })
-      .catch(() => setMessage("저장된 캐릭터 정보를 복원하지 못했습니다. 새로 조회할 수 있습니다."));
-  }, []);
-
-  async function search(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmedKey = apiKey.trim();
-    const trimmedName = characterName.trim();
-    if (!trimmedKey || !trimmedName) {
-      setMessage("API 키와 캐릭터명을 모두 입력해주세요.");
-      return;
-    }
-    setIsSearching(true);
-    setMessage("로스트아크 API에서 캐릭터 정보를 불러오는 중입니다...");
-    try {
-      const profile = mapCharacterResponse(await fetchCharacter(trimmedName, trimmedKey));
-      setCharacter(profile);
-      try {
-        await saveCharacter(profile);
-        setMessage("최신 캐릭터 정보를 조회해 이 브라우저에 저장했습니다. API 키는 저장하지 않았습니다.");
-      } catch {
-        setMessage("캐릭터 조회는 완료했지만 브라우저 저장소에는 저장하지 못했습니다.");
-      }
-    } catch (error) {
-      setMessage(getErrorMessage(error));
-    } finally {
-      setIsSearching(false);
-    }
-  }
-
-  const gear = character?.equipment.filter((item) => item.category === "gear") ?? [];
-  const accessories = character?.equipment.filter((item) => item.category === "accessory") ?? [];
-
-  return (
-    <main className={character ? "shell has-character" : "shell"}>
-      <header className="topbar">
-        <div className="brand"><span className="brand-mark">G</span><div><strong>GLAVIER</strong><small>DPS SIMULATOR</small></div></div>
-        <nav><a className="active">캐릭터 조회</a><a>시뮬레이션</a><a>세팅 비교</a></nav>
-        <button className="theme" type="button" aria-label="테마 전환">◐</button>
-      </header>
-
-      <section className="hero">
-        <div><p className="eyebrow">LOST ARK · CHARACTER PROFILE</p><h1>캐릭터 스펙을 불러오세요</h1><p className="subtitle">로스트아크 API에서 캐릭터 정보를 조회하고, DPS 시뮬레이션의 기준 세팅으로 사용합니다.</p></div>
-        <div className="hero-orb">✦</div>
-      </section>
-
-      <section className="search-card">
-        <div className="section-title"><span className="step">01</span><div><h2>캐릭터 조회</h2><p>API 키는 브라우저 메모리에서 조회 요청에만 사용하며 저장하지 않습니다.</p></div></div>
-        <form onSubmit={search} className="search-form">
-          <label>Lost Ark API Key<input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="API 키 또는 bearer API 키를 입력하세요" autoComplete="off" /></label>
-          <label>캐릭터명<div className="name-input"><input value={characterName} onChange={(event) => setCharacterName(event.target.value)} placeholder="조회할 캐릭터명을 입력하세요" maxLength={24} /><button type="submit" disabled={isSearching}>{isSearching ? "조회 중..." : "조회하기"} <span>→</span></button></div></label>
-        </form>
-        <p className="form-message" aria-live="polite"><span className="status-dot" />{message}</p>
-      </section>
-
-      {character ? (
-        <section className="profile-grid">
-          <div className="profile-main">
-            <div className="profile-heading">
-              <div className="avatar">⚔</div>
-              <div><p className="eyebrow">CHARACTER PROFILE</p><h2>{character.name}</h2><p>{character.server} · {character.className} · {character.engraving}</p></div>
-              <span className="ready">브라우저 저장</span>
-            </div>
-
-            <div className="stat-row">
-              {character.stats.map(([label, value], index) => <div className="stat" key={`${label}-${index}`}><span>{label}</span><strong>{value}</strong></div>)}
-              <div className="stat"><span>아이템 레벨</span><strong>{character.level}</strong></div>
-            </div>
-
-            <nav className="simulator-menu" aria-label="시뮬레이터 항목">
-              {simulatorTabs.map((tab) => <button className={activeTab === tab ? "active" : ""} key={tab} type="button" onClick={() => setActiveTab(tab)}>{tab}</button>)}
-            </nav>
-
-            <div className="tab-content">
-              {activeTab === "전체" ? <OverviewPanel character={character} gear={gear} accessories={accessories} /> : null}
-              {activeTab === "보석" ? <GemPanel gems={character.gems} /> : null}
-              {activeTab === "장비 및 악세사리" ? <EquipmentPanels gear={gear} accessories={accessories} /> : null}
-              {activeTab === "각인" ? <EngravingPanel engravings={character.engravings} /> : null}
-              {activeTab === "아크패시브" ? <ArkPassivePanel arkPassive={character.arkPassive} /> : null}
-              {activeTab === "아크그리드" ? <ArkGridPanel arkGrid={character.arkGrid} /> : null}
-            </div>
-          </div>
-        </section>
-      ) : (
-        <section className="feature-grid">{[["⌁", "상세 스펙 조회", "장비, 각인, 스탯 정보를 한눈에 확인"], ["◇", "원본 세팅 보존", "조회한 캐릭터를 기준 세팅으로 복사"], ["✦", "DPS 시뮬레이션", "조건을 바꾸며 결과를 비교"]].map(([icon, title, text]) => <div className="feature" key={title}><span>{icon}</span><h3>{title}</h3><p>{text}</p></div>)}</section>
-      )}
-
-      <footer>DATA PROVIDED BY LOST ARK OPEN API <span>·</span> GLAVIER DPS SIMULATOR v0.1</footer>
-    </main>
-  );
+  return <main className="shell simulator-shell"><header className="topbar"><div className="brand"><span className="brand-mark">G</span><div><strong>GLAVIER</strong><small>DPS SIMULATOR</small></div></div><nav className="main-menu">{[["simulation", "시뮬레이션"], ["comparison", "세팅 비교"], ["api", "API 설정"]].map(([id, label]) => <button type="button" className={menu === id ? "active" : ""} onClick={() => setMenu(id as MainMenu)} key={id}>{label}</button>)}</nav></header>
+    {menu === "api" ? <section className="workspace api-workspace"><div className="workspace-title"><span>03</span><div><h1>API 설정</h1><p>키는 현재 브라우저 메모리에서 조회 요청에만 사용하며 저장하지 않습니다.</p></div></div><label className="api-field">Lost Ark API Key<input type="password" value={apiKey} onChange={(event) => setApiKey(event.target.value)} placeholder="API 키 또는 bearer API 키" autoComplete="off" /></label><a className="guide-link" href="https://developer-lostark.game.onstove.com/" target="_blank" rel="noreferrer">로스트아크 Open API 키 발급 가이드 ↗</a></section> : null}
+    {menu === "comparison" ? <section className="workspace"><div className="workspace-title"><span>02</span><div><h1>세팅 비교</h1><p>시뮬레이션에서 저장한 세팅의 전투 사이클과 계산 결과를 비교합니다.</p></div></div>{savedSettings.length ? <div className="setting-compare">{savedSettings.map((setting) => <article key={setting.id}><strong>{setting.name}</strong><p>아이템 레벨 {setting.itemLevel} · 공격력 {setting.attackPower}</p><small>{setting.cycle.length ? setting.cycle.join(" → ") : "전투 사이클 미설정"}</small></article>)}</div> : <p className="empty-copy">저장된 세팅이 없습니다.</p>}</section> : null}
+    {menu === "simulation" ? <><section className="lookup-bar"><form onSubmit={search}><label>캐릭터명<input value={characterName} onChange={(event) => setCharacterName(event.target.value)} placeholder="캐릭터명 입력" maxLength={24} /></label><button type="submit" disabled={searching}>{searching ? "조회 중..." : "캐릭터 불러오기"}</button><button type="button" className="subtle-button" onClick={() => setMenu("api")}>API 설정</button></form><p aria-live="polite">{message}</p></section>
+      {character ? <section className="workspace simulation-workspace"><div className="profile-strip"><Artwork icon={character.characterImage} label="⚔" /><div><span>{character.server} · {character.className}</span><h1>{character.name}</h1></div><strong>아이템 레벨 {character.level}</strong><button type="button" onClick={saveSetting}>현재 세팅 저장</button></div><nav className="sim-tabs" aria-label="시뮬레이션 탭">{simTabs.map((item) => <button type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)} key={item}>{item}</button>)}</nav><div className="sim-content">
+        {tab === "전체" ? <div className="summary-board">{[["직업", deriveBuildName(character)], ["아이템 레벨", character.level], ["공격 속도", character.combat.attackSpeed], ["이동 속도", character.combat.moveSpeed], ["치명타 적중률", character.combat.criticalChance], ["예상 DPS", "계산 준비 중"], ["예상 1사이클 딜량", "계산 준비 중"]].map(([label, value]) => <article key={label}><span>{label}</span><strong>{value}</strong></article>)}</div> : null}
+        {tab === "기본 장비" ? <div className="equipment-layout"><div className="equipment-column"><section className="equipment-section"><h2>전투 장비</h2><div className="equipment-edit-grid">{gear.map((item) => <GearEditor item={item} onChange={(patch) => updateEquipment(item.id, patch)} key={item.id} />)}</div></section><section className="equipment-section avatar-section"><h2>아바타</h2><div className="avatar-table"><div><span></span>{avatarSlots.map((slot) => <strong key={slot}>{slot}</strong>)}</div>{["없음", "영웅", "전설"].map((grade) => <div key={grade}><span>{grade}</span>{avatarSlots.map((slot) => <label key={slot}><input type="radio" name={`avatar-${slot}`} checked={avatarGrades[slot] === grade} onChange={() => setAvatarGrades((current) => ({ ...current, [slot]: grade }))} /><i /></label>)}</div>)}</div></section></div><div className="equipment-column"><section className="equipment-section"><h2>악세사리</h2><div className="accessory-edit-grid">{accessories.map((item) => <AccessoryEditor item={item} onChange={(patch) => updateEquipment(item.id, patch)} key={item.id} />)}</div></section><section className="equipment-section"><h2>어빌리티 스톤</h2><StoneEditor icon={stone?.icon ?? null} effects={stoneEffects} engravingNames={engravingNames} onChange={(index, patch) => setStoneEffects((current) => current.map((effect, effectIndex) => effectIndex === index ? { ...effect, ...patch } : effect))} /></section><section className="equipment-section"><h2>팔찌</h2><BraceletEditor item={bracelet} onChange={(patch) => bracelet && updateEquipment(bracelet.id, patch)} /></section></div><section className="equipment-section engraving-section"><h2>각인</h2><div className="engraving-editor">{character.engravingDetails.slice(0, 5).map((engraving, index) => <div key={`${engraving.name}-${index}`}><Artwork icon={engraving.icon} label="◆" /><div className="engraving-card-content"><div className="engraving-controls"><select aria-label={`${engraving.name} 등급`} value={engraving.grade} onChange={(event) => updateEngraving(index, { grade: event.target.value as EngravingProfile["grade"], level: event.target.value === "전설" ? 0 : engraving.level })}><option>유물</option><option>전설</option></select><select aria-label={`${engraving.name} 활성도`} value={engraving.level} disabled={engraving.grade === "전설"} onChange={(event) => updateEngraving(index, { level: Number(event.target.value) })}>{[0, 1, 2, 3, 4].map((level) => <option value={level} key={level}>+{level}</option>)}</select></div><select aria-label={`각인 ${index + 1}`} value={engraving.name} onChange={(event) => updateEngraving(index, { name: event.target.value })}>{ENGRAVING_NAMES.map((name) => <option key={name}>{name}</option>)}</select></div></div>)}</div></section></div> : null}
+        {tab === "아크 패시브 & 그리드" ? <div className="ark-board"><section><div className="section-heading"><div><h2>아크패시브</h2><p>공식 API는 현재 선택된 노드만 제공합니다. 현재 노드와 시뮬레이션용 후보를 선택할 수 있습니다.</p></div></div><div className="ark-points">{character.arkPassive.points.map((point) => <div key={point.name}><span>{point.name}</span><strong>{point.value}</strong></div>)}</div><div className="ark-columns"><PassiveEditor title="진화" group="evolution" effects={character.arkPassive.evolution} onChange={(index, patch) => updatePassive("evolution", index, patch)} /><PassiveEditor title="깨달음" group="enlightenment" effects={character.arkPassive.enlightenment} onChange={(index, patch) => updatePassive("enlightenment", index, patch)} /><PassiveEditor title="도약" group="leap" effects={character.arkPassive.leap} onChange={(index, patch) => updatePassive("leap", index, patch)} /></div></section><section><div className="section-heading"><div><h2>아크그리드</h2><p>공식 `/arkgrid` 응답의 Slots를 코어로 표시합니다.</p></div><span>{deriveGridShorthand(character.arkGrid.cores) ?? "-"}</span></div>{character.arkGrid.cores.length ? <div className="core-grid">{character.arkGrid.cores.map((core, index) => { const options = [...new Set([core.name, ...(gridCoreOptions[index] ?? ["없음"])])]; return <article key={core.id}><Artwork icon={core.icon} label={index < 3 ? "秩" : "混"} /><select value={core.name} onChange={(event) => updateCore(index, { name: event.target.value })}>{options.map((option) => <option key={option}>{option}</option>)}</select><select value={core.grade ?? "고대"} onChange={(event) => updateCore(index, { grade: event.target.value })}><option>고대</option><option>유물</option><option>영웅</option></select><select value={core.point ?? 20} onChange={(event) => { const point = Number(event.target.value); updateCore(index, { point, level: coreLevel(point) }); }}>{gridPoints.map((point) => <option value={point} key={point}>{point}P</option>)}</select><b>Lv.{core.level ?? coreLevel(core.point) ?? "-"}</b></article>; })}</div> : <p className="empty-copy">이 캐릭터의 공식 API 응답에 활성 코어 Slots가 없습니다.</p>}<EffectList effects={character.arkGrid.effects} /></section></div> : null}
+        {tab === "스킬 & 전투 사이클" ? <div className="skills-cycle"><section><div className="section-heading"><div><h2>스킬과 장착 보석</h2><p>현재 보석을 수정하거나 스킬에 새 보석을 추가할 수 있습니다.</p></div><span className={gems.length >= 11 ? "limit-reached" : ""}>{gems.length} / 11</span></div>{gemMessage ? <p className="validation-message" role="alert">{gemMessage}</p> : null}<div className="skills-list">{character.skills.map((skill) => <SkillEditor skill={skill} gems={gems.filter((gem) => gem.skill === skill.name)} canAdd={gems.length < 11} onAdd={() => addGem(skill)} onChange={updateGem} onRemove={(id) => { setGems((current) => current.filter((gem) => gem.id !== id)); setGemMessage(""); }} key={skill.id} />)}</div></section><section className="cycle-builder"><div className="section-heading"><div><h2>전투 사이클 구성</h2><p>스킬을 추가한 뒤 위·아래로 이동해 사용 순서를 만드세요.</p></div><span>{cycle.length}개</span></div><div className="cycle-add"><select value={cycleSkill} onChange={(event) => setCycleSkill(event.target.value)}><option value="">스킬 선택</option>{cycleSkills.map((skill) => <option value={skill.name} key={skill.id}>{skill.name}</option>)}</select><button type="button" onClick={() => cycleSkill && setCycle((value) => [...value, cycleSkill])}>추가</button></div>{cycle.length ? <ol className="cycle-list">{cycle.map((skill, index) => <li key={`${skill}-${index}`}><b>{index + 1}</b><span>{skill}</span><button type="button" onClick={() => setCycle((value) => { const next = [...value]; if (index > 0) [next[index - 1], next[index]] = [next[index], next[index - 1]]; return next; })}>↑</button><button type="button" onClick={() => setCycle((value) => { const next = [...value]; if (index < next.length - 1) [next[index + 1], next[index]] = [next[index], next[index + 1]]; return next; })}>↓</button><button type="button" onClick={() => setCycle((value) => value.filter((_, itemIndex) => itemIndex !== index))}>삭제</button></li>)}</ol> : <p className="empty-copy">전투 사이클에 사용할 스킬을 추가하세요.</p>}</section></div> : null}
+      </div></section> : <section className="empty-start"><span>01</span><h1>시뮬레이션 시작</h1><p>API 설정 후 캐릭터명을 입력하면 장비, 아크 시스템, 스킬과 보석을 모두 불러옵니다.</p></section>}</> : null}
+  </main>;
 }

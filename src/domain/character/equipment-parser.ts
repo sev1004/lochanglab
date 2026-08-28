@@ -9,6 +9,7 @@ export type EquipmentProfile = {
   name: string;
   icon: string | null;
   grade: string;
+  simulationGrade: "T4 유물" | "T4 고대" | "T4 전율" | "영웅" | "전설" | "유물" | "고대";
   tier: number | null;
   quality: number | null;
   itemLevel: string | null;
@@ -211,6 +212,9 @@ function mapEquipmentItem(item: LostArkEquipment, index: number): EquipmentProfi
   const baseStats = tooltip.lines
     .filter((line) => /^(힘|민첩|지능|체력)\s*\+?[\d,]+$/.test(line))
     .filter((line, lineIndex, values) => values.indexOf(line) === lineIndex);
+  const simulationGrade = slot === "완갑"
+    ? item.Grade === "영웅" || item.Grade === "전설" || item.Grade === "유물" || item.Grade === "고대" ? item.Grade : "유물"
+    : item.Name?.includes("전율") ? "T4 전율" : item.Grade === "고대" ? "T4 고대" : "T4 유물";
 
   return {
     id: `${slot}-${index}`,
@@ -219,6 +223,7 @@ function mapEquipmentItem(item: LostArkEquipment, index: number): EquipmentProfi
     name: item.Name ?? "이름 없음",
     icon: item.Icon ?? null,
     grade: item.Grade ?? "등급 미상",
+    simulationGrade,
     tier: tierText ? Number(tierText) : null,
     quality: tooltip.quality,
     itemLevel,
