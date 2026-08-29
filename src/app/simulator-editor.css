@@ -1,0 +1,68 @@
+.equipment-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:start; }
+.equipment-column { display:grid; min-width:0; min-height:0; gap:12px; }
+.equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:minmax(0,1fr) auto auto; overflow:hidden; }
+.equipment-section { padding:16px; background:var(--surface2); border:1px solid var(--line); border-radius:5px; }
+.equipment-section h2 { margin:0; font-size:14px; }
+.equipment-section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:11px; }
+.gear-bulk-control { display:flex; align-items:center; gap:6px; color:#d5b880; font-size:10px; letter-spacing:0; white-space:nowrap; }
+.gear-bulk-control select { width:78px; height:26px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
+.equipment-edit-grid { display:grid; grid-auto-rows:67px; gap:7px; }
+.gear-editor { display:grid; grid-template-columns:52px minmax(0,1fr); column-gap:8px; height:67px; min-height:0; padding:0; background:transparent; }
+.quality-art { position:relative; flex:0 0 52px; align-self:flex-start; padding-bottom:15px; }
+.quality-art.no-quality { padding-bottom:15px; }
+.quality-art .compact-art { width:52px; height:52px; }
+.quality-art > .quality-gold,.quality-art > .quality-purple,.quality-art > .quality-sky { position:absolute; right:0; bottom:0; left:0; min-height:14px; padding:2px 0; color:#1f1710; font:800 8px Manrope, sans-serif; line-height:10px; text-align:center; white-space:nowrap; }
+.quality-gold { background:#e2af22; }.quality-purple { background:#bc9dff; }.quality-sky { background:#81d3f4; }
+.gear-fields { display:grid; grid-template-columns:78px 66px; grid-template-rows:13px 23px 23px; grid-template-areas:"level level" "grade quality" "enhance ."; align-content:start; gap:3px 5px; min-width:0; }
+.gear-fields > small { grid-area:level; color:#92a6c4; font:10px "DM Mono"; line-height:13px; }
+.gear-fields label { grid-area:quality; display:flex; align-items:center; gap:4px; color:#8995a6; font-size:9px; white-space:nowrap; }
+.gear-fields select,.gear-fields input { min-width:0; height:23px; margin:0; padding:1px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }.accessory-meta select,.accessory-meta input,.stone-editor select,.bracelet-editor select,.engraving-editor select,.passive-row select,.core-grid select,.gem-editor select { min-width:0; height:27px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
+.gear-fields > select:first-of-type { grid-area:grade; width:78px; }.gear-fields > select:last-of-type { grid-area:enhance; width:78px; }.gear-fields label input { width:41px; padding:2px; text-align:center; }
+.avatar-section { margin-top:0; }.avatar-table { width:100%; padding:6px 8px; background:#101722; }
+.avatar-table > div { display:grid; grid-template-columns:55px repeat(4,1fr); align-items:center; min-height:30px; border-bottom:1px solid #273140; text-align:center; }
+.avatar-table > div:last-child { border-bottom:0; }.avatar-table span,.avatar-table strong { font-size:9px; }.avatar-table input { position:absolute; opacity:0; pointer-events:none; }.avatar-table label { display:grid; place-items:center; }.avatar-table i { display:block; width:13px; height:13px; border:1px solid #66768b; border-radius:50%; }.avatar-table input:checked + i { border:4px solid #80e7bd; }
+.accessory-edit-grid { display:grid; gap:8px; }.accessory-editor { display:grid; grid-template-columns:52px 72px minmax(0,1fr); align-items:start; gap:6px; padding:0; background:transparent; }.accessory-meta { display:grid; gap:4px; min-width:0; }.accessory-meta select,.accessory-meta input { width:100%; }.accessory-option-list { display:grid; gap:4px; min-width:0; }.accessory-option-list select { width:100%; }
+.stone-editor,.bracelet-editor { display:flex; gap:8px; padding:0; background:transparent; }.stone-editor > div,.bracelet-fields { display:grid; flex:1; gap:5px; min-width:0; }.stone-row { display:grid; grid-template-columns:1fr 50px; gap:5px; }.bracelet-art { flex:0 0 52px; }.bracelet-art .compact-art { width:52px; height:52px; }.bracelet-stat-list { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }.bracelet-stat-row { display:grid; grid-template-columns:58px minmax(0,1fr); gap:4px; }.bracelet-stat-row input { width:100%; min-width:0; height:27px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }.bracelet-stat-row input:disabled { color:#68778a; }.bracelet-option-list { display:grid; gap:4px; }.bracelet-option-list select { width:100%; }
+.bracelet-unavailable { display:grid; gap:4px; padding-top:6px; border-top:1px solid #283547; }.bracelet-unavailable > small { color:#8995a6; font-size:9px; }.bracelet-unavailable > span { padding:5px 6px; border:1px solid #344154; border-radius:3px; background:#111722; color:#7f8b9b; font-size:9px; }
+.bracelet-catalog-review { margin-top:12px; border-top:1px solid #283547; padding-top:10px; }.bracelet-catalog-review summary { display:flex; align-items:center; gap:6px; color:#b9c6d8; font-size:10px; cursor:pointer; }.bracelet-catalog-review summary b { color:#80e7bd; }.bracelet-catalog-review summary span { margin-left:auto; padding:2px 5px; border-radius:3px; font-size:8px; }.catalog-valid { background:#17352d; color:#80e7bd; }.catalog-invalid { background:#48242a; color:#ff9e9e; }.bracelet-catalog-table { display:grid; margin-top:9px; max-height:360px; overflow:auto; border:1px solid #283547; }.catalog-head,.catalog-row { display:grid; grid-template-columns:100px repeat(3,minmax(150px,1fr)); }.catalog-head { position:sticky; top:0; z-index:1; background:#182232; }.catalog-head strong,.catalog-row > strong,.catalog-row > span { padding:6px; border-right:1px solid #283547; border-bottom:1px solid #283547; font-size:8px; }.catalog-row > span:last-child,.catalog-head strong:last-child { border-right:0; }.catalog-row > strong { color:#d5b880; }.catalog-row small { display:block; margin-top:2px; color:#68778a; font:7px "DM Mono"; overflow-wrap:anywhere; }
+.engraving-section { grid-column:1 / -1; }.engraving-editor { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }.engraving-editor > div { display:grid; grid-template-columns:32px minmax(0,1fr); gap:6px; align-items:center; padding:8px; background:#101722; }.engraving-editor .compact-art { width:32px; height:32px; }.engraving-card-content { min-width:0; }.engraving-controls { display:grid; grid-template-columns:1fr 48px; gap:4px; }.engraving-card-content > select { width:100%; margin-top:5px; }
+.passive-editor { padding:11px; background:#101722; }.passive-editor h3 { margin-bottom:8px; font-size:12px; }.passive-row { display:grid; grid-template-columns:1fr 70px; gap:5px; margin-top:5px; }.core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }.core-grid article { display:grid; grid-template-columns:38px 1fr 70px 58px 42px; align-items:center; gap:5px; padding:8px; background:#101722; }.core-grid b { color:#80e7bd; font:500 10px "DM Mono"; }
+.evolution-tier-stack { display:grid; grid-column:1 / -1; gap:8px; }.evolution-t1-editor,.evolution-tier-editor { grid-column:1 / -1; }.evolution-t1-heading h3 { margin:0; }.evolution-t1-heading p { margin:3px 0 9px; color:#8995a6; font-size:9px; }.evolution-t1-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }.evolution-t1-list article { display:grid; grid-template-columns:34px minmax(0,1fr) 56px; grid-template-rows:auto minmax(15px,auto); align-items:center; gap:4px 6px; padding:7px; border:1px solid #283547; background:#0c1118; }.evolution-t1-list .compact-art { grid-row:1 / -1; width:34px; height:34px; }.evolution-t1-controls { display:grid; min-width:0; gap:2px; }.evolution-t1-controls select,.evolution-t1-level { min-width:0; height:22px; margin:0; padding:2px 4px; border:1px solid #344154; border-radius:3px; background:#111b28; color:#edf2f7; font-size:8px; }.evolution-t1-controls strong { overflow:hidden; color:#d5b880; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.evolution-t1-list small { grid-column:2 / 4; color:#80e7bd; font:9px "DM Mono"; line-height:1.35; }
+.skill-editor .skill-gems { flex-wrap:wrap; justify-content:flex-end; max-width:420px; }.gem-editor { display:grid; grid-template-columns:30px 62px 58px 22px; align-items:center; gap:3px; }.gem-editor .compact-art { width:30px; height:30px; }.gem-editor button,.gem-add-button { height:30px; padding:0 7px; background:#243244; color:#d7e2ef; }.gem-add-button:disabled { cursor:not-allowed; opacity:.35; }.limit-reached,.validation-message { color:#ff9e9e!important; }.validation-message { margin:-4px 0 10px; font-size:10px; }
+/* 기본 장비 탭: 전투 장비 / 악세사리 / 아크 시스템을 같은 행의 3열로 배치한다. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:12px; }
+  .sim-content:has(.equipment-layout) .equipment-layout { display:contents; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid { grid-column:3; grid-row:1; min-width:0; margin:0; }
+  .sim-content:has(.equipment-layout) .engraving-section { grid-column:1 / -1; }
+  .equipment-ark-grid > section { padding:12px; }
+  .equipment-ark-grid .section-heading { align-items:flex-start; gap:7px; }
+  .equipment-ark-grid .section-heading h2 { margin-bottom:4px; font-size:13px; }
+  .equipment-ark-grid .section-heading p { font-size:9px; line-height:1.35; }
+}
+/* 오른쪽 편집 열은 왼쪽(전투 장비+아바타) 실제 높이를 기준으로 제한한다. */
+@media (min-width:901px) {
+  .equipment-layout > .equipment-column:nth-child(2) > .equipment-section { min-height:0; padding:12px; }
+  .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:first-child { display:flex; flex-direction:column; }
+  .equipment-layout > .equipment-column:nth-child(2) .equipment-section-heading,.equipment-layout > .equipment-column:nth-child(2) > .equipment-section > h2 { margin-bottom:7px; font-size:13px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-edit-grid { gap:6px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-editor { grid-template-columns:44px 58px minmax(0,1fr); gap:5px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-editor .quality-art { flex-basis:44px; padding-bottom:13px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-editor .quality-art .compact-art { width:44px; height:44px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-meta { gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-option-list,.equipment-layout > .equipment-column:nth-child(2) .bracelet-option-list { gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .accessory-meta select,.equipment-layout > .equipment-column:nth-child(2) .accessory-meta input,.equipment-layout > .equipment-column:nth-child(2) .accessory-option-list select,.equipment-layout > .equipment-column:nth-child(2) .stone-editor select,.equipment-layout > .equipment-column:nth-child(2) .bracelet-editor select,.equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-row input { height:22px; font-size:8px; }
+  .equipment-layout > .equipment-column:nth-child(2) .stone-editor,.equipment-layout > .equipment-column:nth-child(2) .bracelet-editor { gap:6px; }
+  .equipment-layout > .equipment-column:nth-child(2) .stone-editor > div,.equipment-layout > .equipment-column:nth-child(2) .bracelet-fields { gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .stone-row { gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-art { flex-basis:44px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-art .compact-art { width:44px; height:44px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-list { gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-row { grid-template-columns:54px minmax(0,1fr); gap:3px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-unavailable { gap:3px; padding-top:5px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-unavailable > span { padding:4px 5px; font-size:8px; }
+  .equipment-layout > .equipment-column:nth-child(2) .bracelet-catalog-review { margin-top:7px; padding-top:6px; }
+}
+@media (max-width:900px) { .equipment-layout { grid-template-columns:1fr; }.equipment-layout > .equipment-column:nth-child(1),.equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:auto; }.engraving-editor,.evolution-t1-list { grid-template-columns:repeat(3,minmax(0,1fr)); }.core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.core-grid article { grid-template-columns:38px 1fr 64px 54px 38px; } }
+@media (max-width:900px) { .sim-content:has(.equipment-layout) { display:block; }.sim-content:has(.equipment-layout) .equipment-layout { display:grid; }.sim-content:has(.equipment-layout) .equipment-ark-grid { margin-top:12px; } }
+@media (max-width:600px) { .engraving-editor,.core-grid,.evolution-t1-list { grid-template-columns:1fr; }.skill-editor .skill-gems { justify-content:flex-start; max-width:none; } }
