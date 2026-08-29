@@ -2,8 +2,8 @@
 .equipment-column { display:grid; min-width:0; min-height:0; gap:12px; }
 .equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:minmax(0,1fr) auto auto; overflow:hidden; }
 .equipment-section { padding:16px; background:var(--surface2); border:1px solid var(--line); border-radius:5px; }
-.equipment-section h2 { margin:0; font-size:14px; }
-.equipment-section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:11px; }
+.equipment-section h2 { margin:0 0 7px; font-size:13px; }
+.equipment-section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
 .gear-bulk-control { display:flex; align-items:center; gap:6px; color:#d5b880; font-size:10px; letter-spacing:0; white-space:nowrap; }
 .gear-bulk-control select { width:78px; height:26px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
 .equipment-edit-grid { display:grid; grid-auto-rows:67px; gap:7px; }
@@ -26,18 +26,23 @@
 .bracelet-unavailable { display:grid; gap:4px; padding-top:6px; border-top:1px solid #283547; }.bracelet-unavailable > small { color:#8995a6; font-size:9px; }.bracelet-unavailable > span { padding:5px 6px; border:1px solid #344154; border-radius:3px; background:#111722; color:#7f8b9b; font-size:9px; }
 .bracelet-catalog-review { margin-top:12px; border-top:1px solid #283547; padding-top:10px; }.bracelet-catalog-review summary { display:flex; align-items:center; gap:6px; color:#b9c6d8; font-size:10px; cursor:pointer; }.bracelet-catalog-review summary b { color:#80e7bd; }.bracelet-catalog-review summary span { margin-left:auto; padding:2px 5px; border-radius:3px; font-size:8px; }.catalog-valid { background:#17352d; color:#80e7bd; }.catalog-invalid { background:#48242a; color:#ff9e9e; }.bracelet-catalog-table { display:grid; margin-top:9px; max-height:360px; overflow:auto; border:1px solid #283547; }.catalog-head,.catalog-row { display:grid; grid-template-columns:100px repeat(3,minmax(150px,1fr)); }.catalog-head { position:sticky; top:0; z-index:1; background:#182232; }.catalog-head strong,.catalog-row > strong,.catalog-row > span { padding:6px; border-right:1px solid #283547; border-bottom:1px solid #283547; font-size:8px; }.catalog-row > span:last-child,.catalog-head strong:last-child { border-right:0; }.catalog-row > strong { color:#d5b880; }.catalog-row small { display:block; margin-top:2px; color:#68778a; font:7px "DM Mono"; overflow-wrap:anywhere; }
 .engraving-section { grid-column:1 / -1; }.engraving-editor { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }.engraving-editor > div { display:grid; grid-template-columns:32px minmax(0,1fr); gap:6px; align-items:center; padding:8px; background:#101722; }.engraving-editor .compact-art { width:32px; height:32px; }.engraving-card-content { min-width:0; }.engraving-controls { display:grid; grid-template-columns:1fr 48px; gap:4px; }.engraving-card-content > select { width:100%; margin-top:5px; }
-.passive-editor { padding:11px; background:#101722; }.passive-editor h3 { margin-bottom:8px; font-size:12px; }.passive-row { display:grid; grid-template-columns:1fr 70px; gap:5px; margin-top:5px; }.core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }.core-grid article { display:grid; grid-template-columns:38px 1fr 70px 58px 42px; align-items:center; gap:5px; padding:8px; background:#101722; }.core-grid b { color:#80e7bd; font:500 10px "DM Mono"; }
-.evolution-tier-stack { display:grid; grid-column:1 / -1; gap:8px; }.evolution-t1-editor,.evolution-tier-editor { grid-column:1 / -1; }.evolution-t1-heading h3 { margin:0; }.evolution-t1-heading p { margin:3px 0 9px; color:#8995a6; font-size:9px; }.evolution-t1-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:7px; }.evolution-t1-list article { display:grid; grid-template-columns:34px minmax(0,1fr) 56px; grid-template-rows:auto minmax(15px,auto); align-items:center; gap:4px 6px; padding:7px; border:1px solid #283547; background:#0c1118; }.evolution-t1-list .compact-art { grid-row:1 / -1; width:34px; height:34px; }.evolution-t1-controls { display:grid; min-width:0; gap:2px; }.evolution-t1-controls select,.evolution-t1-level { min-width:0; height:22px; margin:0; padding:2px 4px; border:1px solid #344154; border-radius:3px; background:#111b28; color:#edf2f7; font-size:8px; }.evolution-t1-controls strong { overflow:hidden; color:#d5b880; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.evolution-t1-list small { grid-column:2 / 4; color:#80e7bd; font:9px "DM Mono"; line-height:1.35; }
+.passive-editor { min-width:0; padding:10px; background:#101722; border:1px solid #283547; border-radius:4px; }.passive-editor h3 { margin:0; font-size:11px; }.passive-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:5px; margin-top:5px; }.passive-row select { width:100%; }.passive-choice-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:7px; }.passive-choice-heading span { padding:2px 5px; border-radius:3px; background:#1a2c2c; color:#80e7bd; font:8px "DM Mono"; }.core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }.core-grid article { display:grid; grid-template-columns:38px 1fr 70px 58px 42px; align-items:center; gap:5px; padding:8px; background:#101722; }.core-grid b { color:#80e7bd; font:500 10px "DM Mono"; }
+.ark-columns { align-items:start; gap:8px; }.evolution-tier-stack { display:grid; grid-column:1 / -1; gap:6px; min-width:0; }.evolution-t1-editor,.evolution-tier-editor { grid-column:1 / -1; }.evolution-t1-heading { min-width:0; }.evolution-t1-heading h3 { margin:0; }.evolution-t1-heading p { margin:3px 0 7px; color:#8995a6; font-size:8px; line-height:1.35; }.evolution-t1-list { display:grid; grid-template-columns:1fr; gap:4px; }.evolution-t1-list article { display:grid; grid-template-columns:32px minmax(0,1fr) 56px; grid-template-rows:24px minmax(13px,auto); align-items:center; gap:3px 6px; min-width:0; padding:5px; border:1px solid #283547; border-radius:3px; background:#0c1118; }.evolution-t1-list .compact-art { grid-row:1 / -1; width:32px; height:32px; }.evolution-t1-controls { display:grid; min-width:0; gap:1px; }.evolution-t1-controls select,.evolution-t1-level { width:100%; min-width:0; height:22px; margin:0; padding:2px 4px; border:1px solid #344154; border-radius:3px; background:#111b28; color:#edf2f7; font-size:8px; }.evolution-t1-controls strong { overflow:hidden; color:#d5b880; font-size:8px; line-height:11px; text-overflow:ellipsis; white-space:nowrap; }.evolution-t1-list small { grid-column:2 / 4; overflow:hidden; color:#80e7bd; font:8px "DM Mono"; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; }
 .skill-editor .skill-gems { flex-wrap:wrap; justify-content:flex-end; max-width:420px; }.gem-editor { display:grid; grid-template-columns:30px 62px 58px 22px; align-items:center; gap:3px; }.gem-editor .compact-art { width:30px; height:30px; }.gem-editor button,.gem-add-button { height:30px; padding:0 7px; background:#243244; color:#d7e2ef; }.gem-add-button:disabled { cursor:not-allowed; opacity:.35; }.limit-reached,.validation-message { color:#ff9e9e!important; }.validation-message { margin:-4px 0 10px; font-size:10px; }
+/* 진화 옵션 설명은 아이콘 위에 표시하는 커스텀 툴팁으로 통일한다. */
+.evolution-t1-list .compact-art[data-tooltip] { position:relative; overflow:visible; z-index:2; cursor:help; }
+.evolution-t1-list .compact-art[data-tooltip]::after { position:absolute; bottom:calc(100% + 9px); left:50%; width:220px; padding:10px 12px; border:1px solid #3c8f73; border-radius:6px; background:#0b1716; box-shadow:0 8px 24px #0009; color:#80e7bd; content:attr(data-tooltip); font:500 11px/1.5 Manrope,sans-serif; opacity:0; pointer-events:none; text-align:left; transform:translate(-50%,4px); transition:opacity .15s ease,transform .15s ease; white-space:normal; }
+.evolution-t1-list .compact-art[data-tooltip]:hover::after,.evolution-t1-list .compact-art[data-tooltip]:focus-visible::after { opacity:1; transform:translate(-50%,0); }
 /* 기본 장비 탭: 전투 장비 / 악세사리 / 아크 시스템을 같은 행의 3열로 배치한다. */
 @media (min-width:901px) {
-  .sim-content:has(.equipment-layout) { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); align-items:start; gap:12px; }
+  .sim-content:has(.equipment-layout) { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.4fr); align-items:start; gap:12px; }
   .sim-content:has(.equipment-layout) .equipment-layout { display:contents; }
   .sim-content:has(.equipment-layout) .equipment-ark-grid { grid-column:3; grid-row:1; min-width:0; margin:0; }
   .sim-content:has(.equipment-layout) .engraving-section { grid-column:1 / -1; }
   .equipment-ark-grid > section { padding:12px; }
+  .equipment-ark-grid > section:first-child { padding:10px; }
   .equipment-ark-grid .section-heading { align-items:flex-start; gap:7px; }
-  .equipment-ark-grid .section-heading h2 { margin-bottom:4px; font-size:13px; }
+  .equipment-ark-grid .section-heading h2 { margin-bottom:7px; font-size:13px; }
   .equipment-ark-grid .section-heading p { font-size:9px; line-height:1.35; }
 }
 /* 오른쪽 편집 열은 왼쪽(전투 장비+아바타) 실제 높이를 기준으로 제한한다. */
@@ -63,6 +68,177 @@
   .equipment-layout > .equipment-column:nth-child(2) .bracelet-unavailable > span { padding:4px 5px; font-size:8px; }
   .equipment-layout > .equipment-column:nth-child(2) .bracelet-catalog-review { margin-top:7px; padding-top:6px; }
 }
-@media (max-width:900px) { .equipment-layout { grid-template-columns:1fr; }.equipment-layout > .equipment-column:nth-child(1),.equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:auto; }.engraving-editor,.evolution-t1-list { grid-template-columns:repeat(3,minmax(0,1fr)); }.core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.core-grid article { grid-template-columns:38px 1fr 64px 54px 38px; } }
+
+/* 아크그리드는 전투 장비와 악세사리 아래의 전체 폭을 사용한다. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) { grid-template-columns:minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.4fr); }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) { grid-column:1; grid-row:1; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) { grid-column:2; grid-row:1; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid { display:contents; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:first-child { grid-column:3; grid-row:1; min-width:0; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:last-child { grid-column:1 / -1; grid-row:2; min-width:0; }
+}
+
+/* 로펙 스타일의 아크그리드 카드: 코어 아이콘, 두 단계 선택, 포인트 배지, 조각 슬롯. */
+.equipment-ark-grid > section:last-child { min-width:0; }
+.equipment-ark-grid > section:last-child .core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; }
+.equipment-ark-grid > section:last-child .core-grid article { position:relative; display:grid; grid-template-columns:40px minmax(0,1fr); grid-template-rows:24px 24px 20px; align-items:center; gap:4px 7px; min-height:76px; padding:7px; border:1px solid #283547; border-radius:6px; background:#101722; }
+.equipment-ark-grid > section:last-child .core-grid .compact-art { grid-column:1; grid-row:1 / 3; width:40px; height:40px; align-self:center; }
+.equipment-ark-grid > section:last-child .core-grid select { width:100%; height:26px; background:#0c1118; border-color:#344154; color:#edf2f7; }
+.equipment-ark-grid > section:last-child .core-grid select:nth-of-type(1) { grid-column:2; grid-row:2; }
+.equipment-ark-grid > section:last-child .core-grid select:nth-of-type(2) { grid-column:2; grid-row:1; }
+.equipment-ark-grid > section:last-child .core-grid select:nth-of-type(3) { position:static; grid-column:1; grid-row:3; width:40px; height:20px; padding:0 1px; border:0; border-radius:3px; background:#d2a50a; color:#17120a; font-size:8px; font-weight:700; text-align:center; }
+.equipment-ark-grid > section:last-child .core-grid b { display:none; }
+.equipment-ark-grid > section:last-child .core-grid article::after { display:none; content:none; }
+.equipment-ark-grid > section:last-child .effect-list { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-top:10px; }
+.ark-grid-effect-editor li { display:grid; grid-template-columns:28px minmax(0,1fr) 15px; align-items:center; gap:6px; min-width:0; padding:7px 8px; border:1px solid #283547; border-radius:5px; background:#101722; }
+.ark-grid-effect-editor .compact-art { width:28px; height:28px; }
+.ark-grid-effect-editor strong { overflow:hidden; color:#edf2f7; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.ark-grid-effect-editor small { display:block; overflow:hidden; margin-top:2px; color:#80e7bd; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.ark-grid-effect-editor select { width:15px; min-width:15px; height:24px; padding:0; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#80e7bd; font-size:8px; }
+@media (max-width:900px) {
+  .equipment-ark-grid > section:last-child .core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:600px) {
+  .equipment-ark-grid > section:last-child .core-grid { grid-template-columns:1fr; }
+}
+
+/* 각인은 아크패시브 아래에 배치하고 3개 + 2개 두 줄로 표시한다. */
+@media (min-width:901px) {
+  .equipment-ark-grid > section:first-child .engraving-section { min-width:0; margin:8px 0 0; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+.equipment-ark-grid > section:first-child .engraving-section .engraving-editor { align-items:stretch; justify-content:start; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-editor > div { grid-template-columns:44px minmax(0,1fr); grid-template-rows:28px 22px; align-items:center; gap:3px 5px; min-width:0; padding:5px; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-editor .compact-art { grid-column:1; grid-row:1; justify-self:center; width:28px; height:28px; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-card-content,.equipment-ark-grid > section:first-child .engraving-section .engraving-controls { display:contents; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-controls select:first-child { grid-column:1; grid-row:2; width:44px; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-controls select:last-child { grid-column:2; grid-row:1; align-self:end; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-card-content > select { grid-column:2; grid-row:2; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-editor select { width:100%; min-width:0; height:22px; padding:1px 3px; font-size:8px; letter-spacing:-.25px; }
+.equipment-ark-grid > section:first-child .engraving-section .engraving-card-content > select { margin-top:0; }
+@media (max-width:900px) {
+  .equipment-ark-grid > section:first-child .engraving-section { margin-top:8px; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }
+}
+@media (max-width:600px) {
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+/* 장비 열의 미세 높이·간격 조정 및 각인/아크그리드 충돌 방지. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) { margin-right:-4px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .equipment-section-heading h2 { white-space:nowrap; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .gear-bulk-control { transform:translateY(2px); }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .avatar-section h2 { margin-bottom:7px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .avatar-table { padding-bottom:26px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:nth-child(2) { padding-block:13px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:nth-child(3) { padding-top:16px; padding-bottom:31px; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:last-child { grid-row:2; }
+}
+.equipment-ark-grid > section:first-child .ark-points { gap:4px; margin-bottom:6px; }
+.equipment-ark-grid > section:first-child .ark-points > div { padding:9px; }
+.equipment-ark-grid > section:first-child .ark-points strong { margin-top:2px; }
+.equipment-ark-grid > section:first-child .ark-columns { gap:6px; }
+.equipment-ark-grid > section:first-child .evolution-tier-stack { gap:4px; }
+.equipment-ark-grid > section:first-child .passive-editor { padding:8px; }
+.equipment-ark-grid > section:first-child .evolution-t1-list { gap:3px; }
+.equipment-ark-grid > section:first-child .evolution-t1-list article { padding:4px; }
+.equipment-ark-grid > section:first-child .engraving-section { margin-top:6px; padding-top:11px; }
+.equipment-ark-grid > section:first-child .evolution-t1-heading { margin-bottom:5px; }
+.equipment-ark-grid > section:first-child .evolution-t1-heading h3 { font-size:9px; line-height:1.2; }
+/* 악세사리·팔찌 편집 영역은 동일한 컨트롤 규격으로 압축해 3열 화면의 폭을 절약한다. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-edit-grid { gap:4px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-editor { grid-template-columns:40px 50px minmax(0,1fr); gap:4px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-editor .quality-art { flex-basis:40px; padding-bottom:12px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-editor .quality-art .compact-art { width:40px; height:40px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-meta,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-option-list,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-option-list { gap:2px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-meta select,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-meta input,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-option-list select,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .stone-editor select,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-editor select,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-row input {
+    height:20px;
+    padding:1px 4px;
+    border-radius:3px;
+    font-size:8px;
+  }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .stone-editor,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-editor { gap:5px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .stone-editor > div,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-fields { gap:2px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .stone-row { grid-template-columns:minmax(0,1fr) 44px; gap:2px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-art { flex-basis:40px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-art .compact-art { width:40px; height:40px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-list { gap:2px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-stat-row { grid-template-columns:46px minmax(0,1fr); gap:2px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-unavailable { gap:2px; padding-top:4px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-unavailable > span { padding:3px 4px; font-size:8px; }
+}
+@media (max-width:900px) { .equipment-layout { grid-template-columns:1fr; }.equipment-layout > .equipment-column:nth-child(1),.equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:auto; }.engraving-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }.evolution-t1-list { grid-template-columns:repeat(2,minmax(0,1fr)); }.core-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }.core-grid article { grid-template-columns:38px 1fr 64px 54px 38px; } }
+@media (min-width:901px) {
+  .evolution-tier-stack { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+  .evolution-t1-editor,.evolution-t2-editor,.evolution-t3-editor,.evolution-t4-editor { grid-column:auto; }
+  .evolution-t5-editor { grid-column:1 / -1; }
+  .evolution-t5-editor .evolution-t1-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:900px) {
+  .evolution-t5-editor .evolution-t1-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 @media (max-width:900px) { .sim-content:has(.equipment-layout) { display:block; }.sim-content:has(.equipment-layout) .equipment-layout { display:grid; }.sim-content:has(.equipment-layout) .equipment-ark-grid { margin-top:12px; } }
 @media (max-width:600px) { .engraving-editor,.core-grid,.evolution-t1-list { grid-template-columns:1fr; }.skill-editor .skill-gems { justify-content:flex-start; max-width:none; } }
+/* 진화 카드의 옵션명은 선택 박스에만 표시하고, 레벨 폭은 최소화한다. */
+.evolution-t1-controls strong { display:none; }
+.evolution-t1-list article { grid-template-columns:32px minmax(0,1fr) 52px; grid-template-rows:24px; }
+.evolution-t1-list .compact-art[data-tooltip]::after { left:0; width:240px; transform:translateY(4px); }
+.evolution-t1-list .compact-art[data-tooltip]:hover::after,.evolution-t1-list .compact-art[data-tooltip]:focus-visible::after { transform:translateY(0); }
+.evolution-tier-stack { position:relative; z-index:10; overflow:visible; }
+.evolution-t1-list { position:relative; z-index:20; overflow:visible; }
+.evolution-t1-list article { position:relative; overflow:visible; }
+.evolution-t1-list article:has(.compact-art[data-tooltip]:hover),.evolution-t1-list article:has(.compact-art[data-tooltip]:focus-visible) { z-index:100; }
+.evolution-t1-list .compact-art[data-tooltip]::after { z-index:9999; }
+.evolution-tier-stack .evolution-t1-heading p { display:none; }
+.evolution-t1-heading .evolution-limit-warning { display:block; margin:3px 0 0; color:#ffb36b; font-size:9px; }
+.equipment-ark-grid { position:relative; z-index:30; overflow:visible; }
+.equipment-ark-grid > section:first-child { position:relative; z-index:40; overflow:visible; }
+.equipment-ark-grid .ark-columns { position:relative; z-index:50; overflow:visible; }
+.evolution-t1-list .compact-art[data-tooltip]::after { top:auto !important; bottom:calc(100% + 9px) !important; }
+.evolution-tier-stack { isolation:isolate; }
+.evolution-tier-stack > section { position:relative; z-index:1; overflow:visible; }
+.evolution-tier-stack > section:has(.compact-art[data-tooltip]:hover),.evolution-tier-stack > section:has(.compact-art[data-tooltip]:focus-visible) { z-index:1000; }
+.evolution-tier-stack > section:has(.compact-art[data-tooltip]:hover) .evolution-t1-list,.evolution-tier-stack > section:has(.compact-art[data-tooltip]:focus-visible) .evolution-t1-list { z-index:1001; }
+.evolution-tier-stack > section:has(.compact-art[data-tooltip]:hover) .compact-art[data-tooltip]::after,.evolution-tier-stack > section:has(.compact-art[data-tooltip]:focus-visible) .compact-art[data-tooltip]::after { z-index:2147483647; }
+.ark-points strong { min-width:0; overflow:hidden; font-size:11px !important; white-space:nowrap; text-overflow:ellipsis; }
+.accessory-stat-gold { background:#d2a50a !important; color:#17120a !important; }
+.accessory-stat-purple { background:#8b5cf6 !important; color:#fff !important; }
+.accessory-stat-blue { background:#2563eb !important; color:#fff !important; }
+.accessory-stat-teal { background:#14b8a6 !important; color:#071b19 !important; }
+.accessory-stat-gray { background:#888 !important; color:#fff !important; }
+.accessory-editor .quality-art > span[class^="accessory-stat-"] { min-height:14px !important; padding:2px 0 !important; font-size:9px !important; letter-spacing:-.25px; line-height:10px !important; }
+.accessory-editor .quality-art { overflow:hidden; border-radius:5px; background:#111722; }
+.accessory-editor .quality-art { width:100%; min-width:0; }
+.accessory-editor .quality-art .compact-art { display:block; width:100% !important; height:auto !important; aspect-ratio:1; border-radius:5px 5px 0 0; }
+.accessory-editor .quality-art > span[class^="accessory-stat-"] { display:block; width:100%; box-sizing:border-box; border-radius:0 0 4px 4px; }
+.accessory-editor .quality-art > span[class^="accessory-stat-"] { text-align:center; }
+.enlightenment-fixed { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px; margin-bottom:7px; }
+.enlightenment-fixed > div { display:grid; justify-items:center; gap:3px; min-width:0; }
+.enlightenment-fixed .compact-art { width:32px; height:32px; }
+.enlightenment-fixed span { overflow:hidden; color:#80e7bd; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.enlightenment-selects { display:grid; gap:4px; }
+.leap-options { display:grid; gap:5px; }
+.leap-option-row { display:grid; grid-template-columns:34px minmax(0,1fr) 54px; align-items:center; gap:5px; min-width:0; }
+.leap-option-row .compact-art { width:34px; height:34px; }
+.leap-option-row select,.leap-option-row .leap-fixed-name { min-width:0; width:100%; height:27px; margin:0; padding:2px 5px; box-sizing:border-box; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
+.leap-option-row .leap-fixed-name { display:flex; align-items:center; overflow:hidden; color:#80e7bd; white-space:nowrap; text-overflow:ellipsis; }
+.accessory-meta select,.accessory-option-list select,.bracelet-editor select { background:#0c1118 !important; color:#edf2f7 !important; }
+@media (min-width:901px) {
+  .equipment-section-heading { justify-content:flex-start; }
+  .gear-bulk-control { width:80%; margin-left:0; gap:4px; }
+  .gear-bulk-control select { width:80%; }
+  .avatar-section .avatar-table { width:80%; }
+  .accessory-option-list select { width:80%; }
+}

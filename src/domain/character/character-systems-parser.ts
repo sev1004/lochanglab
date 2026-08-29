@@ -16,6 +16,9 @@ export type GemProfile = {
 export type ArkPointProfile = {
   name: string;
   value: string;
+  rank: number | null;
+  level: number | null;
+  description: string | null;
 };
 
 export type ArkEffectProfile = {
@@ -251,7 +254,9 @@ export function mapArkPassive(value: unknown): ArkPassiveProfile {
       const point = asRecord(item);
       const name = point ? firstString(point, ["Name", "Type"]) : null;
       if (!point || !name) return null;
-      return { name, value: String(point.Value ?? point.Level ?? "-") };
+      const description = firstString(point, ["Description"]);
+      const rankLevel = description?.match(/(\d+)\s*랭크\s*(\d+)\s*레벨/);
+      return { name, value: String(point.Value ?? point.Level ?? "-"), rank: rankLevel ? Number(rankLevel[1]) : null, level: rankLevel ? Number(rankLevel[2]) : null, description };
     })
     .filter((item): item is ArkPointProfile => item !== null);
 
@@ -281,7 +286,8 @@ export function mapArkGrid(value: unknown): ArkGridProfile {
     if (!slot) return null;
     const core = nestedRecord(slot, ["Core", "Data", "Item"]) ?? slot;
     const description = plainText(firstString(core, ["Description", "Tooltip", "Detail"]) ?? firstString(slot, ["Description", "Tooltip", "Detail"]));
-    const name = firstString(core, ["Name", "CoreName", "Title"]) ?? firstString(slot, ["Name", "CoreName", "Title"]);
+    const rawName = firstString(core, ["Name", "CoreName", "Title"]) ?? firstString(slot, ["Name", "CoreName", "Title"]);
+    const name = rawName?.replace(/^(?:질서|혼돈)의?\s*(?:해|달|별)\s*코어\s*:\s*/, "").trim();
     const point = firstNumber(slot, ["Point", "Points", "TotalPoint", "Value"])
       ?? firstNumber(core, ["Point", "Points", "TotalPoint", "Value"])
       ?? Number(description?.match(/(\d+)\s*P/i)?.[1] ?? NaN);

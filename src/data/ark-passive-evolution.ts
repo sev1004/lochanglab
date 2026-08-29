@@ -33,10 +33,10 @@ export const EVOLUTION_TIER_CATALOG: Record<EvolutionTier, EvolutionCatalogOptio
   ].map(([name, icon, maxLevel]) => ({ name: name as string, icon: evolutionIcon(icon as number), maxLevel: maxLevel as number, effects: [] })),
 };
 
-export const EVOLUTION_TIER_RULES: Record<EvolutionTier, { maxSelections: number; pointCost: number; totalLevelCap?: number }> = {
+export const EVOLUTION_TIER_RULES: Record<EvolutionTier, { maxSelections: number; pointCost: number; totalLevelCap?: number; totalPointCap?: number }> = {
   T1: { maxSelections: 3, pointCost: 1, totalLevelCap: EVOLUTION_T1_MAX_TOTAL_LEVEL },
-  T2: { maxSelections: 3, pointCost: 10 },
-  T3: { maxSelections: 2, pointCost: 10 },
-  T4: { maxSelections: 1, pointCost: 20 },
-  T5: { maxSelections: 2, pointCost: 10 },
+  T2: { maxSelections: 3, pointCost: 10, totalPointCap: 30 },
+  T3: { maxSelections: 2, pointCost: 10, totalPointCap: 20 },
+  T4: { maxSelections: 2, pointCost: 10, totalPointCap: 20 },
+  T5: { maxSelections: 2, pointCost: 10, totalPointCap: 20 },
 };
