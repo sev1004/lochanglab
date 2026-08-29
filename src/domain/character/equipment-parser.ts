@@ -1,4 +1,5 @@
 import type { LostArkEquipment } from "@/types/lostark-api";
+import { mergeBraceletOptionTexts } from "@/domain/bracelet/bracelet-catalog";
 
 export type EquipmentCategory = "gear" | "accessory";
 
@@ -9,7 +10,7 @@ export type EquipmentProfile = {
   name: string;
   icon: string | null;
   grade: string;
-  simulationGrade: "T4 유물" | "T4 고대" | "T4 전율" | "영웅" | "전설" | "유물" | "고대";
+  simulationGrade: "T4 전율" | "T4 업화" | "T4 결단" | "T4 유물" | "T4 고대" | "영웅" | "전설" | "유물" | "고대";
   tier: number | null;
   quality: number | null;
   itemLevel: string | null;
@@ -39,11 +40,16 @@ const SLOT_ORDER = [
 
 const OPTION_KEYWORDS = [
   "추가 피해",
+  "추가피해",
   "적에게 주는 피해",
+  "적에게주는피해",
   "무기 공격력",
+  "무기공격력",
   "공격력",
   "치명타 적중률",
+  "치명타적중률",
   "치명타 피해",
+  "치명타피해",
   "낙인력",
   "아군 공격력",
   "아군 피해량",
@@ -76,7 +82,6 @@ const OPTION_KEYWORDS = [
   "비수",
   "응원",
   "깨달음",
-  "도약",
   "수확",
   "반격",
   "오뚝이",
@@ -160,8 +165,7 @@ function parseTooltip(tooltip?: string): TooltipData {
   const lines = textValues
     .flatMap((value) => decodeHtml(value).split("\n"))
     .map((line) => line.replace(/^[·ㆍ◆◇▶▷-]\s*/, "").trim())
-    .filter(Boolean)
-    .filter((line, index, values) => values.indexOf(line) === index);
+    .filter(Boolean);
 
   if (quality === null) {
     const qualityMatch = lines.join(" ").match(/품질\s*(\d{1,3})/);
@@ -181,18 +185,20 @@ function firstMatch(lines: string[], pattern: RegExp) {
 
 function getAccessoryOptions(lines: string[], slot: string) {
   const effectOptions = lines
-    .filter((line) => line.length <= 100)
+    .filter((line) => slot === "팔찌" || line.length <= 100)
     .filter((line) => !/아이템\s*레벨|품질|내구도|거래 가능|귀속|기본 효과|연마 효과/.test(line))
+    .filter((line) => slot !== "팔찌" || !line.includes("도약"))
     .filter((line) => OPTION_KEYWORDS.some((keyword) => line.includes(keyword)))
-    .filter((line) => /[+\-]?\d|상$|중$|하$/.test(line))
-    .filter((line, index, values) => values.indexOf(line) === index);
+    .filter((line) => /[+\-]?\d|상$|중$|하$/.test(line));
 
-  if (slot !== "어빌리티 스톤") return effectOptions.slice(0, 8);
+  if (slot === "팔찌") return mergeBraceletOptionTexts(effectOptions).filter((line, index, values) => values.indexOf(line) === index);
+  const uniqueEffectOptions = effectOptions.filter((line, index, values) => values.indexOf(line) === index);
+  if (slot !== "어빌리티 스톤") return uniqueEffectOptions.slice(0, 8);
 
   const engravingOptions = lines.filter((line) =>
     /Lv\.\s*\d+$|활성도.*[+\-]?\d+$|^[가-힣\s]+\s[+\-]\d+$/.test(line),
   );
-  return [...effectOptions, ...engravingOptions]
+  return [...uniqueEffectOptions, ...engravingOptions]
     .filter((line, index, values) => values.indexOf(line) === index)
     .slice(0, 8);
 }
@@ -214,7 +220,7 @@ function mapEquipmentItem(item: LostArkEquipment, index: number): EquipmentProfi
     .filter((line, lineIndex, values) => values.indexOf(line) === lineIndex);
   const simulationGrade = slot === "완갑"
     ? item.Grade === "영웅" || item.Grade === "전설" || item.Grade === "유물" || item.Grade === "고대" ? item.Grade : "유물"
-    : item.Name?.includes("전율") ? "T4 전율" : item.Grade === "고대" ? "T4 고대" : "T4 유물";
+    : item.Name?.includes("업화") ? "T4 업화" : item.Name?.includes("결단") ? "T4 결단" : item.Name?.includes("전율") ? "T4 전율" : "T4 전율";
 
   return {
     id: `${slot}-${index}`,

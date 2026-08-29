@@ -2,8 +2,15 @@
   "name": "lostark-dps-simulator",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "packageManager": "pnpm@11.24.0",
-  "scripts": {"dev": "next dev", "build": "next build", "start": "next start", "typecheck": "tsc --noEmit"},
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/unit/combat-engine.test.ts"
+  },
   "dependencies": {"next": "latest", "react": "latest", "react-dom": "latest"},
   "devDependencies": {"@types/node": "latest", "@types/react": "latest", "@types/react-dom": "latest", "typescript": "latest"}
 }
