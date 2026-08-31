@@ -1,3 +1,9 @@
+import {
+  GLAVIER_SKILL_BY_NAME,
+  type GlavierSkillData,
+  type GlavierTripodEffect,
+} from "../../data/generated/glavier-skill-data.ts";
+
 export const DEFENSE_CONSTANT = 6_500;
 export const BASE_DEFENSE_MULTIPLIER = 0.402678946212752;
 export const DEFAULT_TARGET_DEFENSE = DEFENSE_CONSTANT * (1 / BASE_DEFENSE_MULTIPLIER - 1);
@@ -79,6 +85,9 @@ export type CombatCalculationResult = {
     baseAttackPower: number;
     finalAttackPower: number;
     skillBaseDamage: null;
+    criticalRate: number;
+    criticalDamageMultiplier: number;
+    criticalOutgoingMultiplier: number;
     criticalMultiplier: number;
     outgoingDamageMultiplier: number;
     incomingDamageMultiplier: 1;
@@ -200,6 +209,9 @@ export function calculateCombatStages(input: CombatCalculationInput): CombatCalc
       baseAttackPower,
       finalAttackPower,
       skillBaseDamage: null,
+      criticalRate,
+      criticalDamageMultiplier: criticalDamage,
+      criticalOutgoingMultiplier: criticalOutgoing,
       criticalMultiplier,
       outgoingDamageMultiplier,
       incomingDamageMultiplier,
@@ -224,6 +236,110 @@ export function calculateCombatStages(input: CombatCalculationInput): CombatCalc
       { stage: "J", label: "방어력 배율", value: defenseMultiplier, formula: "6500 / (6500 + 유효 대상 방어력)", effectIds: ids(applied, ["defenseReduction"]) },
       { stage: "K", label: "최종 스킬 피해", value: null, formula: "F × G × H × I × J; 스킬 계수 데이터 대기", effectIds: [] },
     ],
+  };
+}
+
+export type SingleSkillCalculationInput = CombatCalculationInput & {
+  skill: {
+    name: string;
+    level: number;
+    selectedTripodNames?: readonly string[];
+    /** 조건부 트라이포드가 시뮬레이션 조건에서 충족됐을 때만 true로 전달한다. */
+    includeConditionalTripods?: boolean;
+  };
+};
+
+export type SingleSkillCalculationResult = {
+  skill: Pick<GlavierSkillData, "name" | "code" | "operationType" | "tags" | "baseCooldownSeconds">;
+  level: number;
+  coefficientTotal: number;
+  motionMultiplier: number;
+  tripodDamageMultiplier: number;
+  skillBaseDamage: number;
+  normalDamage: number;
+  maximumCriticalDamage: number;
+  expectedDamage: number;
+  selectedTripods: readonly GlavierTripodEffect[];
+  pendingConditionalTripods: readonly GlavierTripodEffect[];
+  combat: CombatCalculationResult;
+};
+
+function selectedTripodEffects(skill: GlavierSkillData, names: readonly string[], includeConditional: boolean) {
+  const selectedNames = new Set(names.filter((name) => name && name !== "없음"));
+  const selected: GlavierTripodEffect[] = [];
+  const pending: GlavierTripodEffect[] = [];
+  for (const effect of skill.tripods) {
+    if (!selectedNames.has(effect.name)) continue;
+    const conditional = effect.status === "조건부 적용" || Boolean(effect.condition);
+    if (conditional && !includeConditional) pending.push(effect);
+    else if (effect.status === "적용") selected.push(effect);
+  }
+  return { selected, pending };
+}
+
+/**
+ * 단일 스킬의 1회 피해를 계산한다.
+ * F = E × (선택 레벨의 모든 타격 계수 합) × 모션 배율 × 트라이포드 대미지 배율
+ * K = F × G × H × I × J
+ */
+export function calculateSingleSkillDamage(input: SingleSkillCalculationInput): SingleSkillCalculationResult {
+  const skill = GLAVIER_SKILL_BY_NAME[input.skill.name];
+  if (!skill) throw new Error(`알 수 없는 스킬입니다: ${input.skill.name}`);
+  const level = input.skill.level;
+  if (!Number.isInteger(level) || level < 1 || level > 14) throw new Error("스킬 레벨은 1~14 정수여야 합니다.");
+
+  const { selected, pending } = selectedTripodEffects(
+    skill,
+    input.skill.selectedTripodNames ?? [],
+    input.skill.includeConditionalTripods === true,
+  );
+  const criticalEffects: CombatEffect[] = selected.flatMap((effect): CombatEffect[] => {
+    if (effect.percentValue === null) return [];
+    if (effect.effectType === "치명타 확률 가산") {
+      return [{ id: `tripod-${skill.code}-crit-rate-${effect.tier}-${effect.name}`, label: `${skill.name} · ${effect.name}`, bucket: "criticalRate", value: effect.percentValue, source: { system: "manual" } }];
+    }
+    if (effect.effectType === "치명타 피해 가산") {
+      return [{ id: `tripod-${skill.code}-crit-damage-${effect.tier}-${effect.name}`, label: `${skill.name} · ${effect.name}`, bucket: "criticalDamage", value: effect.percentValue, source: { system: "manual" } }];
+    }
+    return [];
+  });
+  const combat = calculateCombatStages({ ...input, effects: [...input.effects, ...criticalEffects] });
+  const coefficientTotal = skill.damageCoefficientRows.reduce((total, row) => total + (row.values[level - 1] ?? 0), 0);
+  const motionMultiplier = skill.motionMultiplier[level - 1] ?? 0;
+  const tripodDamageMultiplier = selected
+    .filter((effect) => effect.effectType === "대미지 배율")
+    .reduce((product, effect) => product * (effect.appliedMultiplier ?? 1), 1);
+  const skillBaseDamage = combat.stages.finalAttackPower * coefficientTotal * motionMultiplier * tripodDamageMultiplier;
+  const nonCriticalScale = combat.stages.outgoingDamageMultiplier
+    * combat.stages.incomingDamageMultiplier
+    * combat.stages.defenseMultiplier;
+  const normalDamage = skillBaseDamage * nonCriticalScale;
+  const maximumCriticalDamage = normalDamage
+    * combat.stages.criticalDamageMultiplier
+    * combat.stages.criticalOutgoingMultiplier;
+  const expectedDamage = skillBaseDamage
+    * combat.stages.criticalMultiplier
+    * nonCriticalScale;
+
+  return {
+    skill: {
+      name: skill.name,
+      code: skill.code,
+      operationType: skill.operationType,
+      tags: skill.tags,
+      baseCooldownSeconds: skill.baseCooldownSeconds,
+    },
+    level,
+    coefficientTotal,
+    motionMultiplier,
+    tripodDamageMultiplier,
+    skillBaseDamage,
+    normalDamage,
+    maximumCriticalDamage,
+    expectedDamage,
+    selectedTripods: selected,
+    pendingConditionalTripods: pending,
+    combat,
   };
 }
 

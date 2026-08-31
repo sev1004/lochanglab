@@ -5,6 +5,7 @@ import {
   BASE_DEFENSE_MULTIPLIER,
   DEFAULT_TARGET_DEFENSE,
   calculateCombatStages,
+  calculateSingleSkillDamage,
   floorForDisplay,
   type CombatCalculationInput,
 } from "../../src/domain/combat/combat-engine.ts";
@@ -97,4 +98,34 @@ test("개인 방어력 감소는 유효 대상 방어력을 줄여 J를 다시 �
 test("내림 처리는 계산 엔진이 아닌 표시 함수에서 수행한다", () => {
   assert.equal(floorForDisplay(854.93), 854);
   assert.equal(floorForDisplay(-0.1), -1);
+});
+
+test("단일 스킬은 모든 타격 계수와 모션 배율을 F에 반영한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 } }),
+    skill: { name: "적룡포", level: 14 },
+  });
+
+  assert.equal(result.coefficientTotal, 7_170);
+  closeTo(result.motionMultiplier, 31.70345837);
+  closeTo(result.skillBaseDamage, 100_000 * 7_170 * 31.70345837);
+  closeTo(result.normalDamage, result.skillBaseDamage * BASE_DEFENSE_MULTIPLIER);
+  closeTo(result.expectedDamage, result.normalDamage);
+});
+
+test("대미지·치명 트라이포드는 단일 스킬에만 각각 적용한다", () => {
+  const base = calculateSingleSkillDamage({
+    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 } }),
+    skill: { name: "적룡포", level: 14 },
+  });
+  const enhanced = calculateSingleSkillDamage({
+    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 } }),
+    skill: { name: "적룡포", level: 14, selectedTripodNames: ["단호한 의지", "파괴하는 창"] },
+  });
+
+  closeTo(enhanced.tripodDamageMultiplier, 1.7);
+  closeTo(enhanced.normalDamage, base.normalDamage * 1.7);
+  assert.equal(enhanced.combat.stages.criticalRate, 1);
+  closeTo(enhanced.expectedDamage, enhanced.maximumCriticalDamage);
+  closeTo(enhanced.maximumCriticalDamage / enhanced.normalDamage, 2.6);
 });
