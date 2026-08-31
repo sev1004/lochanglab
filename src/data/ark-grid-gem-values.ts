@@ -8,6 +8,10 @@ const bossDamage = [0,8,16,25,33,41,50,58,66,75,83,91,100,108,116,125,133,141,15
 const values: Record<GemValueKind, number[]> = { attack, additionalDamage, bossDamage };
 
 export function arkGridGemPercent(kind: GemValueKind, level: number) {
+  return `${(arkGridGemRate(kind, level) * 100).toFixed(2)}%`;
+}
+
+export function arkGridGemRate(kind: GemValueKind, level: number) {
   const raw = values[kind][Math.max(0, Math.min(values[kind].length - 1, level))] ?? 0;
-  return `${(raw / 100).toFixed(2)}%`;
+  return raw / 10_000;
 }

@@ -9,7 +9,9 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "test": "node --test tests/unit/combat-engine.test.ts"
+    "test": "node --test tests/unit/combat-engine.test.ts tests/unit/combat-stat-snapshot.test.ts tests/unit/glavier-skill-catalog.test.ts tests/unit/internal-gear-snapshot.test.ts",
+    "generate:glavier-data": "node scripts/generate-glavier-skill-data.mjs",
+    "check:glavier-data": "node scripts/generate-glavier-skill-data.mjs --check"
   },
   "dependencies": {"next": "latest", "react": "latest", "react-dom": "latest"},
   "devDependencies": {"@types/node": "latest", "@types/react": "latest", "@types/react-dom": "latest", "typescript": "latest"}
