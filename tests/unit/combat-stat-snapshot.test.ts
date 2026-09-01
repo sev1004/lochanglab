@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createBaseAttackPowerSnapshot, createCombatStatSnapshot, createFinalAttackPowerSnapshot, createPureAttackPowerSnapshot, createWeaponAttackSnapshot } from "../../src/domain/combat/combat-stat-snapshot.ts";
+import { createBaseAttackPowerSnapshot, createCombatAttributeSnapshots, createCombatStatSnapshot, createEngravingOutgoingDamageSnapshot, createFinalAttackPowerSnapshot, createPureAttackPowerSnapshot, createWeaponAttackSnapshot } from "../../src/domain/combat/combat-stat-snapshot.ts";
 import type { CharacterProfile } from "../../src/domain/character/character-mapper.ts";
 import { enlightenmentWeaponAttackRate, evolutionDamageRate } from "../../src/data/ark-passive-combat-effects.ts";
 
@@ -23,6 +23,15 @@ test("악세사리 UI의 숫자만 있는 전투 스탯도 힘으로 합산한�
   assert.equal(snapshot.accessories, 26984);
 });
 
+test("동일 각인의 본체와 어빌리티 스톤 값은 합산하고 서로 다른 각인은 곱연산한다", () => {
+  const result = createEngravingOutgoingDamageSnapshot({
+    engravings: [{ name: "원한", grade: "전설", level: 4 }],
+    stoneEffects: [{ engraving: "원한", level: 1 }],
+  });
+  assert.equal(result.groups["원한"], 21);
+  assert.equal(result.totalMultiplier, 1.21);
+});
+
 test("무공은 장비·악세·팔찌 고정값을 합산한 뒤 귀걸이 증가율을 적용한다", () => {
   const equipment = [
     { slot: "무기", category: "gear", simulationGrade: "전율", enhancement: 25, itemLevel: "1700", name: "전율 무기", baseStats: [], options: [] },
@@ -39,6 +48,17 @@ test("무공은 장비·악세·팔찌 고정값을 합산한 뒤 귀걸이 증�
 test("아크 패시브 시트의 깨달음 무공과 진화 피해 랭크 값을 사용한다", () => {
   assert.equal(enlightenmentWeaponAttackRate(27), 0.027);
   assert.equal(evolutionDamageRate(6), 0.06);
+});
+
+test("API 전투 스탯에는 빠진 펫 160을 내부 스냅샷 최종값에 더한다", () => {
+  const snapshots = createCombatAttributeSnapshots({
+    apiTotals: { 특화: 0, 신속: 1405, 치명: 0, 제압: 0, 인내: 0, 숙련: 0 },
+    evolution: [],
+    braceletStats: {},
+  });
+  assert.equal(snapshots["신속"].petStat, 160);
+  assert.equal(snapshots["신속"].characterBaseStat, 1245);
+  assert.equal(snapshots["신속"].internalTotal, 1565);
 });
 
 test("순수 공격력은 확정된 최종 주 스탯과 최종 무공으로 계산한다", () => {

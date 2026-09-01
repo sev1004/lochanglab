@@ -3,11 +3,27 @@ import {
   type GlavierSkillData,
   type GlavierTripodEffect,
 } from "../../data/generated/glavier-skill-data.ts";
+import gemDamageValues from "../../data/gem-damage-values.json" with { type: "json" };
+import {
+  baseEvolutionDamageRate,
+  skillEvolutionDamageByBackAttack,
+  skillSpecificEvolutionDamageRate,
+  type EvolutionDamageInput,
+} from "./t5-evolution.ts";
 
 export const DEFENSE_CONSTANT = 6_500;
 export const BASE_DEFENSE_MULTIPLIER = 0.402678946212752;
-export const DEFAULT_TARGET_DEFENSE = DEFENSE_CONSTANT * (1 / BASE_DEFENSE_MULTIPLIER - 1);
+// 방어력 상수 6500에서 기준 배율을 만들기 위한 대상 방어력이다.
+export const DEFAULT_TARGET_DEFENSE = 9_641.89184990511;
 export const DEFAULT_CRITICAL_DAMAGE_MULTIPLIER = 2;
+/** 치명 스탯 1당 치명타 적중률 0.0357% (내부 배율로 변환해 사용). */
+export const CRITICAL_RATE_PER_STAT_PERCENT = 0.0357;
+export const CRITICAL_RATE_PER_STAT = CRITICAL_RATE_PER_STAT_PERCENT / 100;
+
+export function criticalRateFromStat(criticalStat: number) {
+  if (!Number.isFinite(criticalStat) || criticalStat < 0) throw new Error("치명 스탯은 0 이상의 유한한 숫자여야 합니다.");
+  return criticalStat * CRITICAL_RATE_PER_STAT;
+}
 
 export type CombatEffectBucket =
   | "primaryStatFlat"
@@ -23,6 +39,7 @@ export type CombatEffectBucket =
   | "additionalDamage"
   | "outgoingDamage"
   | "equipmentSetDamage"
+  | "incomingDamage"
   | "defenseReduction";
 
 export type CombatEffectStatus = "verified" | "assumed" | "unverified" | "ignored";
@@ -90,7 +107,7 @@ export type CombatCalculationResult = {
     criticalOutgoingMultiplier: number;
     criticalMultiplier: number;
     outgoingDamageMultiplier: number;
-    incomingDamageMultiplier: 1;
+    incomingDamageMultiplier: number;
     defenseMultiplier: number;
     finalSkillDamage: null;
   };
@@ -190,7 +207,7 @@ export function calculateCombatStages(input: CombatCalculationInput): CombatCalc
   const additionalDamage = 1 + sumBucket(applied, "additionalDamage");
   const outgoingEffects = applied.filter((effect) => effect.bucket === "outgoingDamage" || effect.bucket === "equipmentSetDamage");
   const outgoingDamageMultiplier = additionalDamage * productByAdditiveGroup(outgoingEffects);
-  const incomingDamageMultiplier = 1 as const;
+  const incomingDamageMultiplier = 1 + sumBucket(applied, "incomingDamage");
 
   const targetDefense = input.target?.defense ?? DEFAULT_TARGET_DEFENSE;
   const effectiveTargetDefense = targetDefense * remainingDefenseRate(bucketEffects(applied, "defenseReduction"));
@@ -240,27 +257,54 @@ export function calculateCombatStages(input: CombatCalculationInput): CombatCalc
 }
 
 export type SingleSkillCalculationInput = CombatCalculationInput & {
+  /** UI/API 원본이 아닌 내부 스냅샷에서 확정한 계산 단계 값. */
+  snapshot?: {
+    finalAttackPower?: number;
+    criticalDamageMultiplier?: number;
+    criticalOutgoingMultiplier?: number;
+    outgoingDamageMultiplier?: number;
+    backAttackDamageMultiplier?: number;
+    focusSkillDamageMultiplier?: number;
+    flurrySkillDamageMultiplier?: number;
+  };
+  /**
+   * UI 스냅샷에서 확정된 공통 진화 정보다. 엔진이 선택 트라이포드까지 해석한 뒤
+   * 스킬별 진화형 피해를 한 번만 계산한다.
+   */
+  evolutionContext?: Omit<EvolutionDamageInput, "criticalRate" | "skillName">;
+  leapEffects?: readonly { name: string; level: number | null }[];
   skill: {
     name: string;
     level: number;
     selectedTripodNames?: readonly string[];
     /** 조건부 트라이포드가 시뮬레이션 조건에서 충족됐을 때만 true로 전달한다. */
     includeConditionalTripods?: boolean;
+    gems?: readonly { type: string; level: number | null }[];
   };
 };
 
 export type SingleSkillCalculationResult = {
   skill: Pick<GlavierSkillData, "name" | "code" | "operationType" | "tags" | "baseCooldownSeconds">;
   level: number;
-  coefficientTotal: number;
+  motionConstant: number;
   motionMultiplier: number;
   tripodDamageMultiplier: number;
+  awakeningDamageMultiplier: number;
+  awakeningCriticalRateBonus: number;
+  gemDamageMultiplier: number;
   skillBaseDamage: number;
   normalDamage: number;
   maximumCriticalDamage: number;
   expectedDamage: number;
   selectedTripods: readonly GlavierTripodEffect[];
   pendingConditionalTripods: readonly GlavierTripodEffect[];
+  evolution: {
+    base: number;
+    withoutBackAttack: number;
+    withBackAttack: number;
+    skillSpecificWithoutBackAttack: number;
+    isBackAttackSkill: boolean;
+  };
   combat: CombatCalculationResult;
 };
 
@@ -270,7 +314,9 @@ function selectedTripodEffects(skill: GlavierSkillData, names: readonly string[]
   const pending: GlavierTripodEffect[] = [];
   for (const effect of skill.tripods) {
     if (!selectedNames.has(effect.name)) continue;
-    const conditional = effect.status === "조건부 적용" || Boolean(effect.condition);
+    // 스킬 선택 UI에서 선택한 트라이포드는 해당 조작(차지·홀딩 등)을 수행하는
+    // 최대 피해 기준으로 계산한다. 실제 전투 조건에 따른 별도 스위치만 조건부로 남긴다.
+    const conditional = effect.status === "조건부 적용";
     if (conditional && !includeConditional) pending.push(effect);
     else if (effect.status === "적용") selected.push(effect);
   }
@@ -279,7 +325,7 @@ function selectedTripodEffects(skill: GlavierSkillData, names: readonly string[]
 
 /**
  * 단일 스킬의 1회 피해를 계산한다.
- * F = E × (선택 레벨의 모든 타격 계수 합) × 모션 배율 × 트라이포드 대미지 배율
+ * F = (최종 공격력 × 모션 배율 + 모션 상수) × 트라이포드 배율 × 보석 대미지 배율
  * K = F × G × H × I × J
  */
 export function calculateSingleSkillDamage(input: SingleSkillCalculationInput): SingleSkillCalculationResult {
@@ -293,6 +339,13 @@ export function calculateSingleSkillDamage(input: SingleSkillCalculationInput): 
     input.skill.selectedTripodNames ?? [],
     input.skill.includeConditionalTripods === true,
   );
+  const isAwakeningSkill = skill.name === "맹룡난무" || skill.name === "적룡필살";
+  const leapLevel = (name: string) => isAwakeningSkill
+    ? input.leapEffects?.find((effect) => effect.name === name)?.level ?? 0
+    : 0;
+  // 관통 필살은 레벨마다 치적이 누적되는 효과가 아니라, 선택 시 초각성 스킬의
+  // 치명타 적중률을 100% 증가시키는 단일 효과다. 레벨은 피해량 단계에만 사용한다.
+  const awakeningCriticalRate = skill.name === "적룡필살" && leapLevel("관통 필살") > 0 ? 1 : 0;
   const criticalEffects: CombatEffect[] = selected.flatMap((effect): CombatEffect[] => {
     if (effect.percentValue === null) return [];
     if (effect.effectType === "치명타 확률 가산") {
@@ -303,17 +356,123 @@ export function calculateSingleSkillDamage(input: SingleSkillCalculationInput): 
     }
     return [];
   });
-  const combat = calculateCombatStages({ ...input, effects: [...input.effects, ...criticalEffects] });
-  const coefficientTotal = skill.damageCoefficientRows.reduce((total, row) => total + (row.values[level - 1] ?? 0), 0);
+  const enlightenmentLevel = (name: string) =>
+    input.evolutionContext?.evolution.find((effect) => effect.name === name)?.level ?? 0;
+  const enlightenmentEffects: CombatEffect[] = [
+    ...(skill.tags.flurry && enlightenmentLevel("치명적인 베기") > 0
+      ? [{ id: `enlightenment-${skill.code}-critical-damage`, label: `${skill.name} · 치명적인 베기`, bucket: "criticalDamage" as const, value: enlightenmentLevel("치명적인 베기") * 0.04, source: { system: "arkPassive" as const } }]
+      : []),
+    ...(skill.tags.flurry && enlightenmentLevel("전환 난무") > 0
+      ? [
+          { id: `enlightenment-${skill.code}-conversion-damage`, label: `${skill.name} · 전환 난무`, bucket: "outgoingDamage" as const, value: enlightenmentLevel("전환 난무") * 0.007, source: { system: "arkPassive" as const } },
+          { id: `enlightenment-${skill.code}-conversion-critical-rate`, label: `${skill.name} · 전환 난무`, bucket: "criticalRate" as const, value: enlightenmentLevel("전환 난무") * 0.008, source: { system: "arkPassive" as const } },
+        ]
+      : []),
+    ...(skill.tags.focus && enlightenmentLevel("강력한 찌르기") > 0
+      ? [{ id: `enlightenment-${skill.code}-strong-thrust`, label: `${skill.name} · 강력한 찌르기`, bucket: "outgoingDamage" as const, value: enlightenmentLevel("강력한 찌르기") * 0.012, source: { system: "arkPassive" as const } }]
+      : []),
+  ];
+  const combat = calculateCombatStages({
+    ...input,
+    effects: [
+      ...input.effects,
+      ...criticalEffects,
+      ...enlightenmentEffects,
+      ...(awakeningCriticalRate > 0 ? [{ id: `leap-${skill.code}-crit-rate`, label: `${skill.name} · 관통 필살`, bucket: "criticalRate" as const, value: awakeningCriticalRate, source: { system: "manual" as const } }] : []),
+    ],
+  });
+  const snapshot = input.snapshot;
+  if (snapshot) {
+    const stages = combat.stages;
+    if (snapshot.finalAttackPower !== undefined) stages.finalAttackPower = snapshot.finalAttackPower;
+    if (snapshot.criticalDamageMultiplier !== undefined) stages.criticalDamageMultiplier = snapshot.criticalDamageMultiplier;
+    if (snapshot.criticalOutgoingMultiplier !== undefined) stages.criticalOutgoingMultiplier = snapshot.criticalOutgoingMultiplier;
+    if (snapshot.outgoingDamageMultiplier !== undefined) stages.outgoingDamageMultiplier = snapshot.outgoingDamageMultiplier;
+    stages.criticalMultiplier = (1 - stages.criticalRate)
+      + stages.criticalRate * stages.criticalDamageMultiplier * stages.criticalOutgoingMultiplier;
+  }
   const motionMultiplier = skill.motionMultiplier[level - 1] ?? 0;
+  const motionConstant = skill.damageCoefficientRows.reduce(
+    (total, row) => total + (row.values[level - 1] ?? 0),
+    0,
+  );
   const tripodDamageMultiplier = selected
     .filter((effect) => effect.effectType === "대미지 배율")
     .reduce((product, effect) => product * (effect.appliedMultiplier ?? 1), 1);
-  const skillBaseDamage = combat.stages.finalAttackPower * coefficientTotal * motionMultiplier * tripodDamageMultiplier;
+  const gemDamageMultiplier = (input.skill.gems ?? [])
+    .filter((gem) => gem.type === "겁화" || gem.type === "멸화")
+    .reduce((product, gem) => {
+      const levelValues = gemDamageValues[gem.type as keyof typeof gemDamageValues] as Record<string, number> | undefined;
+      return product * (1 + (levelValues?.[String(gem.level ?? 0)] ?? 0));
+    }, 1);
+  const awakeningDamageMultiplier = isAwakeningSkill
+    ? (1 + leapLevel("풀려난 힘") * 0.03)
+      * (skill.name === "적룡필살"
+        ? (1 + Math.max(0, leapLevel("관통 필살") - 1) * 0.10)
+          * (1 + leapLevel("내지르기") * 0.25)
+        : 1)
+      * (skill.name === "맹룡난무"
+        ? (1 + leapLevel("강인한 타격") * 0.25)
+          * (1 + leapLevel("최후의 판단") * 0.30)
+        : 1)
+    : 1;
+  const tripodCriticalRateBonus = selected
+    .filter((effect) => effect.effectType === "치명타 확률 가산")
+    .reduce((total, effect) => total + (effect.percentValue ?? 0), 0);
+  const evolutionInput = input.evolutionContext
+    ? {
+        ...input.evolutionContext,
+        // 뭉툭한 가시의 초과 치적 전환은 표기/기대값용 상한 이전의 원본 치적을 쓴다.
+        criticalRate: input.base.criticalRate
+          + tripodCriticalRateBonus
+          + awakeningCriticalRate,
+        skillName: skill.name,
+      }
+    : null;
+  const evolutionWithoutBackAttack = evolutionInput
+    ? baseEvolutionDamageRate(evolutionInput)
+      + skillSpecificEvolutionDamageRate({ ...evolutionInput, isBackAttack: false })
+    : 0;
+  const evolutionWithBackAttack = evolutionInput && skill.tags.backAttack
+    ? baseEvolutionDamageRate(evolutionInput)
+      + skillSpecificEvolutionDamageRate({ ...evolutionInput, isBackAttack: true })
+    : evolutionWithoutBackAttack;
+  const baseEvolutionDamage = evolutionInput
+    ? baseEvolutionDamageRate(evolutionInput)
+    : 0;
+  const skillSpecificEvolutionDamage = evolutionInput
+    ? skillSpecificEvolutionDamageRate({ ...evolutionInput, isBackAttack: false })
+    : 0;
+  const bluntSpikesLevel = evolutionInput?.evolution.find(
+    (effect) => effect.name === "뭉툭한 가시",
+  )?.level ?? 0;
+  if (bluntSpikesLevel > 0) {
+    // 뭉툭한 가시의 80% 상한은 표기와 기대 피해 양쪽에 적용한다.
+    combat.stages.criticalRate = Math.min(0.8, combat.stages.criticalRate);
+    combat.stages.criticalMultiplier = (1 - combat.stages.criticalRate)
+      + combat.stages.criticalRate
+        * combat.stages.criticalDamageMultiplier
+        * combat.stages.criticalOutgoingMultiplier;
+  }
+  const evolutionDamageMultiplier = 1 + evolutionWithoutBackAttack;
+  const skillBaseDamage = (combat.stages.finalAttackPower * motionMultiplier + motionConstant) * tripodDamageMultiplier * gemDamageMultiplier * evolutionDamageMultiplier * awakeningDamageMultiplier;
   const nonCriticalScale = combat.stages.outgoingDamageMultiplier
     * combat.stages.incomingDamageMultiplier
     * combat.stages.defenseMultiplier;
-  const normalDamage = skillBaseDamage * nonCriticalScale;
+  const backAttackScale = skill.tags.backAttack
+    ? input.snapshot?.backAttackDamageMultiplier ?? 1
+    : 1;
+  const focusSkillScale = skill.tags.focus
+    ? input.snapshot?.focusSkillDamageMultiplier ?? 1
+    : 1;
+  const flurrySkillScale = skill.tags.flurry
+    ? input.snapshot?.flurrySkillDamageMultiplier ?? 1
+    : 1;
+  const normalDamage = skillBaseDamage
+    * nonCriticalScale
+    * backAttackScale
+    * focusSkillScale
+    * flurrySkillScale;
   const maximumCriticalDamage = normalDamage
     * combat.stages.criticalDamageMultiplier
     * combat.stages.criticalOutgoingMultiplier;
@@ -330,15 +489,25 @@ export function calculateSingleSkillDamage(input: SingleSkillCalculationInput): 
       baseCooldownSeconds: skill.baseCooldownSeconds,
     },
     level,
-    coefficientTotal,
+    motionConstant,
     motionMultiplier,
     tripodDamageMultiplier,
+    awakeningDamageMultiplier,
+    awakeningCriticalRateBonus: awakeningCriticalRate,
+    gemDamageMultiplier,
     skillBaseDamage,
     normalDamage,
     maximumCriticalDamage,
     expectedDamage,
     selectedTripods: selected,
     pendingConditionalTripods: pending,
+    evolution: {
+      base: baseEvolutionDamage,
+      withoutBackAttack: evolutionWithoutBackAttack,
+      withBackAttack: evolutionWithBackAttack,
+      skillSpecificWithoutBackAttack: skillSpecificEvolutionDamage,
+      isBackAttackSkill: skill.tags.backAttack,
+    },
     combat,
   };
 }

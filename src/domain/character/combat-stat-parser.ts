@@ -31,6 +31,12 @@ export function parseCombatStats(stats: StatSource[]) {
     return `${(value >= 100 ? value : 100 + value).toFixed(2).replace(/\.00$/, "")}%`;
   };
   return {
+    criticalStat: Number(stats.find((stat) => stat.Type === "치명")?.Value?.replaceAll(",", "") ?? 0) || 0,
+    specializationStat: Number(stats.find((stat) => stat.Type === "특화")?.Value?.replaceAll(",", "") ?? 0) || 0,
+    swiftnessStat: Number(stats.find((stat) => stat.Type === "신속")?.Value?.replaceAll(",", "") ?? 0) || 0,
+    dominationStat: Number(stats.find((stat) => stat.Type === "제압")?.Value?.replaceAll(",", "") ?? 0) || 0,
+    enduranceStat: Number(stats.find((stat) => stat.Type === "인내")?.Value?.replaceAll(",", "") ?? 0) || 0,
+    expertiseStat: Number(stats.find((stat) => stat.Type === "숙련")?.Value?.replaceAll(",", "") ?? 0) || 0,
     attackSpeed: speedPercent(/공격\s*속도[^\d%]{0,40}(\d+(?:\.\d+)?)\s*%/),
     moveSpeed: speedPercent(/이동\s*속도[^\d%]{0,40}(\d+(?:\.\d+)?)\s*%/),
     criticalChance: percent(/치명타\s*적중률[^\d%]{0,40}(\d+(?:\.\d+)?)\s*%/),

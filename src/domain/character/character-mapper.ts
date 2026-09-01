@@ -2,6 +2,7 @@ import { CharacterApiResponse } from "@/types/lostark-api";
 import { mapEquipment, type EquipmentProfile } from "@/domain/character/equipment-parser";
 import { parseCombatStats } from "@/domain/character/combat-stat-parser";
 import { engravingIcon } from "@/data/engraving-catalog";
+import type { CombatAttributeBaseline } from "@/domain/combat/combat-stat-snapshot";
 import {
   mapArkGrid,
   mapArkPassive,
@@ -29,10 +30,12 @@ export type CharacterProfile = {
   buildName: string;
   skills: SkillProfile[];
   avatars: AvatarProfile[];
-  combat: { attackSpeed: string; moveSpeed: string; criticalChance: string; attackPower: string };
+  combat: { criticalStat: number; specializationStat: number; swiftnessStat: number; dominationStat: number; enduranceStat: number; expertiseStat: number; attackSpeed: string; moveSpeed: string; criticalChance: string; attackPower: string };
   gems: GemProfile[];
   arkPassive: ArkPassiveProfile;
   arkGrid: ArkGridProfile;
+  initialCriticalStat?: { evolutionT1Level: number; braceletStat: number };
+  initialCombatAttributes?: CombatAttributeBaseline;
   raw: CharacterApiResponse;
 };
 
@@ -54,12 +57,21 @@ export function mapCharacterResponse(data: CharacterApiResponse): CharacterProfi
   const arkPassive = mapArkPassive(data.arkPassive);
   const arkGrid = mapArkGrid(data.arkGrid);
   const combat = parseCombatStats(profile.Stats ?? []);
+  const engravingNameAliases: Record<string, string> = {
+    기습: "기습의 대가",
+    돌대: "돌격대장",
+    저받: "저주받은 인형",
+    질증: "질량 증가",
+    속속: "속전속결",
+    마효증: "마나 효율 증가",
+  };
   const engravingDetails: EngravingProfile[] = engravingItems.map((item) => {
     const descriptionLevel = item.Description?.match(/(?:Lv\.|레벨)\s*(\d+)/i)?.[1];
     const level = "Level" in item && typeof item.Level === "number" ? item.Level : Number(descriptionLevel ?? 0);
     const grade = "Grade" in item && item.Grade === "전설" ? "전설" : "유물";
     const abilityStoneLevel = "AbilityStoneLevel" in item && typeof item.AbilityStoneLevel === "number" ? item.AbilityStoneLevel : 0;
-    const name = item.Name ?? "이름 없음";
+    const rawName = item.Name ?? "이름 없음";
+    const name = engravingNameAliases[rawName] ?? rawName;
     return { name, grade, level: Math.min(4, Math.max(0, level)), abilityStoneLevel: Math.min(4, Math.max(0, abilityStoneLevel)), icon: engravingIcon(name) ?? item.Icon ?? null };
   });
   const identityText = [...arkPassive.enlightenment, ...arkPassive.effects].map((effect) => `${effect.name} ${effect.description ?? ""}`).join(" ");

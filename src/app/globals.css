@@ -24,3 +24,6 @@
 .api-storage-note { margin:8px 0 0; color:var(--muted); font-size:10px; }
 .profile-dps{margin-left:auto;display:grid;gap:2px}.profile-dps span{color:var(--muted);font-size:10px}.profile-dps strong{margin-left:0;color:var(--accent);font-size:16px}.header-character-search{margin-left:auto}.header-character-search form{display:flex;align-items:center;gap:5px}.header-character-search input{box-sizing:border-box;width:150px;height:30px;margin:0;padding:0 8px;background:#0c1118;color:var(--text);border:1px solid var(--line);border-radius:3px}.header-character-search button{box-sizing:border-box;height:30px;margin:0;padding:0 10px;background:var(--accent);color:#10201c;border-radius:3px}
 .profile-strip{position:sticky;top:0;z-index:100;background:var(--surface2);}
+/* 브라우저 확대 없이도 시뮬레이터를 읽기 좋은 150% 밀도로 표시한다. */
+.simulator-shell{max-width:1320px!important}
+@media(min-width:701px){.simulator-shell{width:76%;max-width:none!important;margin-inline:12%;zoom:1.5}}

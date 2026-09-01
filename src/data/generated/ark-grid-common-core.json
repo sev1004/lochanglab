@@ -499,8 +499,8 @@
     "point": 17,
     "effect": "critRate",
     "operation": "rate_add",
-    "value": 1.3,
-    "originalEffect": "치명타 적중률 1.30% 증가",
+    "value": 2.6,
+    "originalEffect": "치명타 적중률 2.6% 증가",
     "source": null
   },
   {

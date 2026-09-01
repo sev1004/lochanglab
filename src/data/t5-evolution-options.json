@@ -1,0 +1,26 @@
+{
+  "뭉툭한 가시": {
+    "type": "critical-rate-conversion",
+    "levels": {
+      "1": { "baseEvolutionDamagePercent": 7.5, "criticalRateCapPercent": 80, "conversionRate": 1.25, "maxEvolutionDamagePercent": 52.5 },
+      "2": { "baseEvolutionDamagePercent": 15, "criticalRateCapPercent": 80, "conversionRate": 1.5, "maxEvolutionDamagePercent": 75 }
+    }
+  },
+  "음속 돌파": {
+    "type": "speed-conversion",
+    "baseSpeedPercent": 100,
+    "speedCapPercent": 140,
+    "levels": {
+      "1": { "speedToEvolutionRate": 0.05, "baseSpeedIncreaseCapPercent": 40, "thresholdBonusPercent": 4, "conversionRate": 0.15, "maxEvolutionDamagePercent": 12 },
+      "2": { "speedToEvolutionRate": 0.1, "baseSpeedIncreaseCapPercent": 40, "thresholdBonusPercent": 8, "conversionRate": 0.3, "maxEvolutionDamagePercent": 24 }
+    }
+  },
+  "인파이팅": {
+    "type": "flat-evolution-damage",
+    "levels": { "1": { "evolutionDamagePercent": 9 }, "2": { "evolutionDamagePercent": 18 } }
+  },
+  "입식 타격가": {
+    "type": "flat-evolution-damage",
+    "levels": { "1": { "evolutionDamagePercent": 10.5 }, "2": { "evolutionDamagePercent": 21 } }
+  }
+}
