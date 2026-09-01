@@ -1,6 +1,6 @@
 .equipment-layout { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:start; }
 .equipment-column { display:grid; min-width:0; min-height:0; gap:12px; }
-.equipment-layout > .equipment-column:nth-child(2) { grid-template-rows:minmax(0,1fr) auto auto; overflow:hidden; }
+.equipment-layout > .equipment-column:nth-child(2) { align-content:start; grid-template-rows:auto auto auto; overflow:hidden; }
 .equipment-section { padding:16px; background:var(--surface2); border:1px solid var(--line); border-radius:5px; }
 .equipment-section h2 { margin:0 0 7px; font-size:13px; }
 .equipment-section-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:7px; }
@@ -19,6 +19,10 @@
 .gear-fields select,.gear-fields input { min-width:0; height:23px; margin:0; padding:1px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }.accessory-meta select,.accessory-meta input,.stone-editor select,.bracelet-editor select,.engraving-editor select,.passive-row select,.core-grid select,.gem-editor select { min-width:0; height:27px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
 .gear-fields > select:first-of-type { grid-area:grade; width:78px; }.gear-fields > select:last-of-type { grid-area:enhance; width:78px; }.gear-fields label input { width:41px; padding:2px; text-align:center; }
 .avatar-section { margin-top:0; }.avatar-table { width:100%; padding:6px 8px; background:#101722; }
+.avatar-select-list { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; padding:7px 8px; background:#101722; }
+.avatar-select-list label { display:grid; gap:4px; min-width:0; }
+.avatar-select-list span { overflow:hidden; color:#d7e2ef; font-size:9px; font-weight:700; text-align:center; text-overflow:ellipsis; white-space:nowrap; }
+.avatar-select-list select { width:100%; min-width:0; height:24px; margin:0; padding:1px 4px; border:1px solid #344154; border-radius:3px; background:#0c1118; color:#edf2f7; font-size:8px; }
 .avatar-table > div { display:grid; grid-template-columns:55px repeat(4,1fr); align-items:center; min-height:30px; border-bottom:1px solid #273140; text-align:center; }
 .avatar-table > div:last-child { border-bottom:0; }.avatar-table span,.avatar-table strong { font-size:9px; }.avatar-table input { position:absolute; opacity:0; pointer-events:none; }.avatar-table label { display:grid; place-items:center; }.avatar-table i { display:block; width:13px; height:13px; border:1px solid #66768b; border-radius:50%; }.avatar-table input:checked + i { border:4px solid #80e7bd; }
 .accessory-edit-grid { display:grid; gap:8px; }.accessory-editor { display:grid; grid-template-columns:52px 72px minmax(0,1fr); align-items:start; gap:6px; padding:0; background:transparent; }.accessory-meta { display:grid; gap:4px; min-width:0; }.accessory-meta select,.accessory-meta input { width:100%; }.accessory-option-list { display:grid; gap:4px; min-width:0; }.accessory-option-list select { width:100%; }
@@ -35,6 +39,34 @@
 .evolution-t1-list .compact-art[data-tooltip]:hover::after,.evolution-t1-list .compact-art[data-tooltip]:focus-visible::after { opacity:1; transform:translate(-50%,0); }
 /* 기본 장비 탭: 전투 장비 / 악세사리 / 아크 시스템을 같은 행의 3열로 배치한다. */
 @media (min-width:901px) {
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(2) {
+    grid-template-rows:auto auto;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack {
+    grid-column:1 / 3;
+    grid-row:1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:12px;
+    align-content:start;
+    min-width:0;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout {
+    display:contents;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section {
+    grid-column:1 / 3;
+    grid-row:2;
+    margin-top:0;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(1) { grid-column:1; grid-row:1; }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(2) { grid-column:2; grid-row:1; }
+  .sim-content:has(.equipment-left-stack) .equipment-ark-grid > section:first-child { grid-row:1; }
+}
+
+@media (max-width:900px) {
+  .equipment-left-stack { display:contents; }
+}
   .sim-content:has(.equipment-layout) { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,.8fr) minmax(0,1.4fr); align-items:start; gap:12px; }
   .sim-content:has(.equipment-layout) .equipment-layout { display:contents; }
   .sim-content:has(.equipment-layout) .equipment-ark-grid { grid-column:3; grid-row:1; min-width:0; margin:0; }
@@ -44,7 +76,6 @@
   .equipment-ark-grid .section-heading { align-items:flex-start; gap:7px; }
   .equipment-ark-grid .section-heading h2 { margin-bottom:7px; font-size:13px; }
   .equipment-ark-grid .section-heading p { font-size:9px; line-height:1.35; }
-}
 /* 오른쪽 편집 열은 왼쪽(전투 장비+아바타) 실제 높이를 기준으로 제한한다. */
 @media (min-width:901px) {
   .equipment-layout > .equipment-column:nth-child(2) > .equipment-section { min-height:0; padding:12px; }
@@ -117,6 +148,17 @@
 .equipment-ark-grid > section:first-child .engraving-section .engraving-card-content > select { grid-column:2; grid-row:2; }
 .equipment-ark-grid > section:first-child .engraving-section .engraving-editor select { width:100%; min-width:0; height:22px; padding:1px 3px; font-size:8px; letter-spacing:-.25px; }
 .equipment-ark-grid > section:first-child .engraving-section .engraving-card-content > select { margin-top:0; }
+/* 어빌리티 스톤은 각인의 여섯 번째 슬롯으로 배치한다. */
+@media (min-width:901px) {
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor { display:grid; grid-template-columns:28px minmax(0,1fr) 36px; grid-template-rows:22px 22px; align-items:center; gap:3px 5px; min-width:0; padding:5px; background:#101722; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .compact-art { grid-column:1; grid-row:1 / 3; width:28px; height:28px; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor > div,.equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row { display:contents; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(1) select:first-child { grid-column:2; grid-row:1; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(1) select:last-child { grid-column:3; grid-row:1; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(2) select:first-child { grid-column:2; grid-row:2; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(2) select:last-child { grid-column:3; grid-row:2; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor select { width:100%; min-width:0; height:22px; margin:0; padding:1px 3px; font-size:8px; }
+}
 @media (max-width:900px) {
   .equipment-ark-grid > section:first-child .engraving-section { margin-top:8px; }
   .equipment-ark-grid > section:first-child .engraving-section .engraving-editor { grid-template-columns:repeat(3,minmax(0,1fr)); }
@@ -131,9 +173,9 @@
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .equipment-section-heading h2 { white-space:nowrap; }
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .gear-bulk-control { transform:translateY(2px); }
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .avatar-section h2 { margin-bottom:7px; }
-  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .avatar-table { padding-bottom:26px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1) .avatar-table { padding-bottom:36px; }
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:nth-child(2) { padding-block:13px; }
-  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:nth-child(3) { padding-top:16px; padding-bottom:31px; }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section:nth-child(3) { padding-top:16px; padding-bottom:121px; }
   .sim-content:has(.equipment-layout) .equipment-ark-grid > section:last-child { grid-row:2; }
 }
 .equipment-ark-grid > section:first-child .ark-points { gap:4px; margin-bottom:6px; }
@@ -189,6 +231,17 @@
 @media (max-width:900px) {
   .evolution-t5-editor .evolution-t1-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
+
+/* 기본 장비 탭의 하단 영역을 장비·악세사리·아크패시브 기준선에 맞춘다. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) > .engraving-section { grid-column:1 / 3; grid-row:2; min-width:0; margin-top:0; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:first-child { grid-column:3; grid-row:1; }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:last-child { grid-column:1 / -1; grid-row:3; margin-top:8px; }
+  .equipment-ark-grid > section:first-child .avatar-table { padding-bottom:12px; }
+  .equipment-ark-grid > section:first-child .ark-columns { row-gap:8px; }
+  .equipment-ark-grid > section:first-child .passive-editor { padding-block:10px; }
+  .equipment-ark-grid > section:first-child .enlightenment-fixed { margin-block:6px; }
+}
 @media (max-width:900px) { .sim-content:has(.equipment-layout) { display:block; }.sim-content:has(.equipment-layout) .equipment-layout { display:grid; }.sim-content:has(.equipment-layout) .equipment-ark-grid { margin-top:12px; } }
 @media (max-width:600px) { .engraving-editor,.core-grid,.evolution-t1-list { grid-template-columns:1fr; }.skill-editor .skill-gems { justify-content:flex-start; max-width:none; } }
 /* 진화 카드의 옵션명은 선택 박스에만 표시하고, 레벨 폭은 최소화한다. */
@@ -215,11 +268,16 @@
 .gem-board-add { min-height:114px; padding:5px; border:1px dashed #40506a; border-radius:5px; background:#111b28; color:#80e7bd; font-size:8px; }
 .skills-cycle .skill-editor { min-height:64px; }
 .skills-cycle .skill-editor .skill-detail { max-width:none; }
-.skills-cycle .skill-editor { display:grid; grid-template-columns:38px 108px 158px 111px 115px; grid-template-rows:1fr 1fr; align-items:center; justify-content:start; gap:5px 8px; padding:8px 10px; }
-.skills-cycle .skill-editor .compact-art { grid-row:1 / 3; width:38px; height:38px; }
+.skills-cycle .skill-editor { display:grid; grid-template-columns:46px 108px 158px 122px minmax(160px,1fr) minmax(145px,.9fr); grid-template-rows:1fr 1fr; align-items:center; justify-content:start; gap:5px 8px; padding:8px 10px; }
+.skill-icon-column { grid-column:1; grid-row:1 / 3; display:grid; grid-template-rows:46px 22px; justify-items:center; gap:3px; }
+.skill-icon-column .compact-art { width:46px; height:46px; }
+.skill-title-column { grid-column:2; grid-row:1 / 3; display:grid; align-content:start; gap:2px; min-width:0; }
+.skills-cycle .skill-editor .compact-art { width:46px; height:46px; }
 .skill-name { overflow:hidden; color:#edf2f7; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.skill-tripod-multiplier { color:#80e7bd; font-size:9px; white-space:nowrap; }
+.skill-tripod-effect { color:#aab8c9; font-size:8px; line-height:1.15; white-space:nowrap; }
 .skill-level-select,.skill-tripod-selects select,.skill-add select { width:100%; min-width:0; height:22px; padding:2px 5px; border:1px solid #344154; border-radius:4px; background:#111b28; color:#edf2f7; font-size:9px; }
-.skill-level-select { grid-column:2; grid-row:2; width:44px; }
+.skill-level-select { width:52px; justify-self:center; font-size:8px; }
 .skill-tripod-selects { display:grid; grid-column:3; grid-row:1 / 3; grid-template-columns:1fr; gap:3px; width:158px; min-width:0; }
 .skill-gem-inline { display:grid; grid-column:4; grid-row:1 / 3; grid-template-rows:1fr 1fr; align-items:center; gap:3px; min-width:0; width:111px; }
 .skill-gem-inline > div { display:grid; grid-template-columns:30px minmax(0,1fr) 14px; grid-template-rows:1fr 1fr; align-items:center; gap:2px 12px; min-width:0; }
@@ -230,11 +288,17 @@
 .skill-gem-inline button { height:18px; min-width:0; padding:0 3px; border:1px dashed #40506a; border-radius:4px; background:#111b28; color:#80e7bd; font-size:8px; white-space:nowrap; }
 .skill-gem-add-slot { width:100%; }
 .skill-gem-inline { margin-left:8px; padding-left:8px; border-left:1px solid #2a3b4f; }
+.skill-gem-inline:empty { display:none; }
 .skill-gem-inline > div { position:relative; padding-right:0; }
+.skill-gem-inline { width:142px; margin-left:12px; padding-left:10px; }
+.skill-gem-inline > div { grid-template-columns:46px 54px 14px; column-gap:10px; }
+.skills-cycle .skill-editor .skill-gem-inline .compact-art { width:46px; height:46px; }
+.skill-gem-inline > div > select:nth-of-type(2) { width:44px; }
 .skill-gem-remove { grid-column:3; grid-row:2; width:14px !important; height:18px !important; padding:0 !important; border:0 !important; background:transparent !important; color:#ff9e9e !important; font-size:11px !important; }
-.skill-metrics { display:grid; grid-column:5; grid-row:1 / 3; grid-template-columns:1fr 1fr; gap:16px; margin-left:8px; align-content:center; min-width:0; color:#9aa8ba; font-size:8px; line-height:1.2; }
-.skill-metrics > div { display:grid; gap:4px; min-width:0; }
+.skill-metrics { display:grid; grid-column:5 / 7; grid-row:1 / 3; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:12px; margin-left:8px; align-content:center; min-width:0; color:#9aa8ba; font-size:8px; line-height:1.2; }
+.skill-core-metrics,.skill-evolution-metrics { display:grid; gap:4px; min-width:0; }
 .skill-metrics span { display:flex; justify-content:space-between; gap:4px; white-space:nowrap; }
+.skill-evolution-metrics { padding-left:12px; border-left:1px solid #2a3b4f; }
 .skill-metrics b { color:#d7e2ef; font-weight:600; }
 .skill-bulk-controls { display:flex; align-items:center; gap:5px; margin-left:auto; }
 .skill-bulk-controls strong { color:#9aa8ba; font-size:9px; }
@@ -244,7 +308,20 @@
 .skill-tripod-tooltip:hover::after,.skill-tripod-tooltip:focus-within::after { opacity:1; transform:translateY(0); visibility:visible; }
 .skill-add { display:flex; gap:7px; margin-top:9px; }
 .skill-add button { height:28px; padding:0 10px; border-radius:4px; background:#243244; color:#d7e2ef; font-size:10px; }
-@media (max-width:700px) { .skills-cycle .skill-editor { grid-template-columns:38px minmax(0,1fr); }.skill-tripod-selects { grid-column:2; grid-row:3; width:100%; }.skill-gem-inline { grid-column:2; grid-row:4; }.skill-add { flex-direction:column; }.skill-add button { width:100%; } }
+.skill-header-actions { display:flex; align-items:center; gap:8px; margin-left:auto; min-width:0; }
+.section-heading .skill-add { align-items:center; gap:4px; margin:0; }
+.section-heading .skill-add select { width:92px; height:24px; font-size:8px; }
+.section-heading .skill-add button { height:24px; padding:0 6px; font-size:8px; white-space:nowrap; }
+@media (max-width:700px) { .skills-cycle .skill-editor { grid-template-columns:38px minmax(0,1fr); }.skill-tripod-selects { grid-column:2; grid-row:3; width:100%; }.skill-gem-inline { grid-column:2; grid-row:4; }.skill-metrics { grid-column:1 / 3; grid-row:5; margin-left:0; }.skill-add { flex-direction:column; }.skill-add button { width:100%; } }
+
+/* Skill gem controls: keep the image and selects separated while using a compact width. */
+@media (min-width:701px) {
+  .skills-cycle .skill-editor { grid-template-columns:46px 108px 158px 122px minmax(160px,1fr) minmax(145px,.9fr); }
+  .skills-cycle .skill-editor .skill-gem-inline { width:122px; margin-left:8px; padding-left:8px; }
+  .skills-cycle .skill-editor .skill-gem-inline > div { grid-template-columns:46px 36px 14px; column-gap:6px; }
+  .skills-cycle .skill-editor .skill-gem-inline .compact-art { width:46px; height:46px; }
+  .skills-cycle .skill-editor .skill-gem-inline > div > select:nth-of-type(2) { width:36px; }
+}
 @media (min-width:701px) { .sim-content .skills-cycle { grid-template-columns:1fr; align-items:start; }.skills-cycle .cycle-builder { grid-column:1; grid-row:1; }.skills-cycle .skill-list-section { grid-column:1; grid-row:2; } }
 @media (max-width:700px) { .skills-cycle .gem-board { padding:13px; }.gem-board-heading { display:grid; gap:10px; }.gem-bulk-controls { justify-content:flex-start; }.gem-board-list { grid-template-columns:repeat(3,46px); max-width:100%; }.gem-remove-button { opacity:1; } }
 .evolution-t1-list article { grid-template-columns:32px minmax(0,1fr) 52px; grid-template-rows:24px; }
@@ -297,7 +374,105 @@
   .accessory-option-list select { width:80%; }
 }
 
+/* 기본 장비 탭의 세로 흐름: 좌측 장비·악세사리 아래 각인, 전체 하단 아크그리드 */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-layout) {
+    grid-template-columns:minmax(0,.95fr) minmax(0,.85fr) minmax(0,1.2fr);
+  }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1),
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) {
+    min-width:0;
+    align-self:start;
+    height:auto;
+  }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) {
+    overflow:visible;
+  }
+  .sim-content:has(.equipment-layout) > .engraving-section {
+    grid-column:1 / 3;
+    grid-row:2;
+    width:100%;
+    min-width:0;
+    margin-top:-8px;
+  }
+  .sim-content:has(.equipment-layout) > .engraving-section .engraving-editor {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    min-width:0;
+  }
+  .sim-content:has(.equipment-layout) > .engraving-section .engraving-editor > div {
+    min-width:0;
+  }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:first-child {
+    grid-column:3;
+    grid-row:1 / 3;
+    align-self:start;
+  }
+  .sim-content:has(.equipment-layout) > .engraving-section {
+    grid-column:1 / 3;
+    grid-row:2;
+    align-self:start;
+  }
+  .sim-content:has(.equipment-layout) .equipment-ark-grid > section:last-child {
+    grid-column:1 / -1;
+    grid-row:3;
+    margin-top:8px;
+    align-self:start;
+  }
+  .equipment-ark-grid > section:first-child .avatar-section {
+    margin-top:8px;
+  }
+  .equipment-ark-grid > section:first-child .avatar-table {
+    padding-top:8px;
+    padding-bottom:12px;
+  }
+  .equipment-ark-grid > section:first-child .ark-columns {
+    row-gap:10px;
+  }
+  .equipment-ark-grid > section:first-child .passive-editor {
+    padding-block:10px;
+  }
+  .equipment-ark-grid > section:first-child .evolution-t1-list {
+    min-width:0;
+  }
+  .equipment-ark-grid > section:first-child .evolution-t1-list article {
+    grid-template-columns:34px minmax(0,1fr) 54px;
+    min-height:38px;
+    padding:6px 7px;
+    gap:4px 6px;
+    justify-items:stretch;
+  }
+  .equipment-ark-grid > section:first-child .evolution-t1-list article .compact-art {
+    width:32px;
+    height:32px;
+    max-width:32px;
+    max-height:32px;
+    display:block;
+    margin:auto;
+    justify-self:center;
+    align-self:center;
+  }
+  .equipment-ark-grid > section:first-child .evolution-tier-stack .evolution-tier-editor .compact-art {
+    width:32px;
+    height:32px;
+    max-width:32px;
+    max-height:32px;
+    margin:auto;
+    justify-self:center;
+    align-self:center;
+  }
+  .equipment-ark-grid > section:first-child .evolution-t1-list article > .compact-art {
+    grid-column:1;
+    justify-self:center;
+    align-self:center;
+  }
+}
+
 .internal-gear-debug { margin:0 0 10px; padding:9px 12px; border:1px solid #2d4158; border-radius:5px; background:#101722; }
+.floating-doping-panel { position:fixed; left:12px; top:180px; z-index:20; display:grid; gap:7px; width:150px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; }
+.floating-doping-panel label { display:flex; align-items:center; gap:6px; }
+.skill-evolution-extra { display:flex; grid-column:2; grid-row:1 / span 2; align-items:center; margin-top:2px; color:#91a4b9; font-size:8px; }
+.skill-evolution-extra b { color:#e6edf5; }
+@media (max-width:900px) { .floating-doping-panel { position:static; width:auto; margin:0 0 10px; } }
 .internal-gear-debug summary { cursor:pointer; color:#80e7bd; font-size:10px; font-weight:700; }
 .internal-gear-debug-summary { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; color:#8fa0b5; font-size:9px; }
 .internal-gear-debug-summary b { margin-left:4px; color:#e8eef7; font-family:"DM Mono",monospace; }
@@ -307,3 +482,64 @@
 .internal-gear-debug-rows strong { color:#d7e2ef; font:700 9px Manrope,sans-serif; }
 .internal-gear-debug-rows small { overflow:hidden; color:#77879d; font-size:7px; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:900px) { .internal-gear-debug-rows { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+
+/* 좌측 장비 스택의 최종 배치 규칙: 기존 장비 레이아웃 규칙보다 우선한다. */
+@media (min-width:901px) {
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack {
+    grid-column:1 / 3;
+    grid-row:1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    grid-template-rows:auto auto;
+    gap:12px;
+    align-content:start;
+    min-width:0;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout {
+    display:contents;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(1) {
+    grid-column:1;
+    grid-row:1;
+    align-self:start;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(2) {
+    grid-column:2;
+    grid-row:1;
+    align-self:start;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section {
+    grid-column:1 / 3;
+    grid-row:2;
+    width:100%;
+    margin:0;
+    align-self:start;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor {
+    grid-template-columns:repeat(3,minmax(0,1fr));
+  }
+
+  /* 진화 카드의 이미지는 카드 첫 열 중앙에만 배치한다. */
+  .equipment-ark-grid > section:first-child .evolution-t1-list article {
+    grid-template-columns:30px minmax(0,1fr) 54px;
+    grid-template-rows:minmax(0,1fr);
+    height:42px;
+    min-height:42px;
+    box-sizing:border-box;
+    align-items:center;
+  }
+  .equipment-ark-grid > section:first-child .evolution-t1-list article > .compact-art {
+    grid-column:1;
+    grid-row:1;
+    width:26px;
+    height:26px;
+    max-width:26px;
+    max-height:26px;
+    justify-self:center;
+    align-self:center;
+    margin:0;
+  }
+  .equipment-ark-grid > section:first-child {
+    padding-bottom:20px;
+  }
+}

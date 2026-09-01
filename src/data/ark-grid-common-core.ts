@@ -1,4 +1,5 @@
 import records from "./generated/ark-grid-common-core.json" with { type: "json" };
+import orderRecords from "./generated/ark-grid-order-glavier-core.json" with { type: "json" };
 
 export type ArkGridCommonCoreRecord = {
   grade: string;
@@ -14,6 +15,7 @@ export type ArkGridCommonCoreRecord = {
 };
 
 export const ARK_GRID_COMMON_CORE_DATA = records as ArkGridCommonCoreRecord[];
+export const ARK_GRID_ORDER_CORE_DATA = orderRecords as ArkGridCommonCoreRecord[];
 
 function normalizeGrade(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -37,6 +39,22 @@ export function resolveArkGridCommonCoreEffects(core: {
   const grade = normalizeGrade(core.grade);
   const supply = supplyWillOf(core);
   return ARK_GRID_COMMON_CORE_DATA.filter((record) =>
+    record.coreName === core.name &&
+    (!grade || record.grade === grade) &&
+    (!supply || record.supplyWill === supply) &&
+    record.point <= (core.point ?? 0),
+  );
+}
+
+export function resolveArkGridOrderCoreEffects(core: {
+  name: string;
+  grade?: string | null;
+  description?: string | null;
+  point?: number | null;
+}) {
+  const grade = normalizeGrade(core.grade);
+  const supply = supplyWillOf(core);
+  return ARK_GRID_ORDER_CORE_DATA.filter((record) =>
     record.coreName === core.name &&
     (!grade || record.grade === grade) &&
     (!supply || record.supplyWill === supply) &&

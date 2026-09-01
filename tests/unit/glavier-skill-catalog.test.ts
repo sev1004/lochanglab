@@ -14,7 +14,8 @@ test("시트 카탈로그는 적룡포의 기본 쿨타임과 스킬 태그를 �
   assert.equal(skill.baseCooldownSeconds, 24);
   assert.equal(skill.tags.holdingOrCasting, true);
   assert.equal(skill.tags.superChargeCandidate, true);
-  assert.equal(skill.damageCoefficientRows.length, 2);
+  // 적룡포의 중복·낮은 모션 상수는 제거하고 유효한 큰 값만 보존한다.
+  assert.equal(skill.damageCoefficientRows.length, 1);
 });
 
 test("피해 계수와 모션 배율은 Lv.1~Lv.14를 각각 보존한다", () => {
@@ -22,7 +23,7 @@ test("피해 계수와 모션 배율은 Lv.1~Lv.14를 각각 보존한다", () =
   assert.ok(skill);
   assert.equal(skill.damageCoefficientRows[0].values.length, 14);
   assert.equal(skill.motionMultiplier.length, 14);
-  assert.equal(getGlavierSkillLevelCoefficient("적룡포", 14), 2389);
+  assert.equal(getGlavierSkillLevelCoefficient("적룡포", 14), 4781);
   assert.equal(getGlavierSkillMotionMultiplier("적룡포", 14), 31.70345837);
 });
 

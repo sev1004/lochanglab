@@ -13,6 +13,16 @@
     "generate:glavier-data": "node scripts/generate-glavier-skill-data.mjs",
     "check:glavier-data": "node scripts/generate-glavier-skill-data.mjs --check"
   },
-  "dependencies": {"next": "latest", "react": "latest", "react-dom": "latest"},
-  "devDependencies": {"@types/node": "latest", "@types/react": "latest", "@types/react-dom": "latest", "typescript": "latest"}
+  "dependencies": {
+    "next": "latest",
+    "react": "latest",
+    "react-dom": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "prettier": "^3.9.6",
+    "typescript": "latest"
+  }
 }

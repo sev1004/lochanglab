@@ -3554,25 +3554,6 @@ export const GLAVIER_SKILLS: readonly GlavierSkillData[] = [
     },
     "damageCoefficientRows": [
       {
-        "sequence": "피해값 1",
-        "values": [
-          612,
-          1081,
-          1379,
-          1618,
-          1808,
-          1957,
-          2087,
-          2207,
-          2297,
-          2386,
-          2388,
-          2388,
-          2389,
-          2389
-        ]
-      },
-      {
         "sequence": "피해값 2",
         "values": [
           1224,
