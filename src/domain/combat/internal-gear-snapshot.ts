@@ -17,6 +17,11 @@ const simulationSeries: Record<string, { tier: string; categories?: string[]; so
   "T4 전율": { tier: "4T", categories: ["세르카", ""], sourceNames: ["전율", "운명의 전율"] },
   "T4 결단": { tier: "4T", categories: ["케누아트 요새", ""], sourceNames: ["결단", "운명의 결단"] },
 };
+const esterWeaponAttackByEnhancement: Record<number, number> = {
+  8: 214400,
+  9: 242574,
+  10: 259554,
+};
 
 const gauntletByEnhancement: Record<number, { primaryStat: number; weaponAttack: number; baseAttackFlat?: number; baseAttackRate: number }> = {
   0: { primaryStat: 10500, weaponAttack: 3500, baseAttackFlat: 0, baseAttackRate: 0 },
@@ -82,6 +87,23 @@ function definitionFor(item: EquipmentProfile, itemLevel: number | null, catalog
   const enhancement = item.enhancement ?? 0;
   const slot = normalizeSlot(item.slot);
   if (!slot) return null;
+  if (slot === "무기" && item.simulationGrade === "참월 : 의") {
+    const weaponAttack = esterWeaponAttackByEnhancement[enhancement];
+    return weaponAttack === undefined
+      ? null
+      : {
+          slot: "무기",
+          sourceName: "참월 : 의",
+          tier: null,
+          category: null,
+          itemLevel: itemLevel ?? 0,
+          enhancement,
+          primaryStat: null,
+          weaponAttack,
+          baseAttackFlat: 0,
+          baseAttackRate: 0,
+        };
+  }
   const candidates = catalog.filter((definition) => normalizeSlot(definition.slot) === slot);
   const series = simulationSeries[item.simulationGrade];
   if (slot === "완갑") {

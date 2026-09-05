@@ -7,6 +7,7 @@ import {
   ARK_GRID_ORDER_CORE_TYPES,
   arkGridOrderCoreNumber,
   arkGridOrderCoreOptions,
+  findArkGridOrderCoreDefinition,
 } from "@/data/ark-grid-order-core-catalog";
 
 type UnknownRecord = Record<string, unknown>;
@@ -424,6 +425,23 @@ export function mapArkGrid(value: unknown): ArkGridProfile {
       };
     })
     .filter((item): item is ArkGridCoreProfile => item !== null);
+  // The API does not guarantee that the three order cores arrive as 해·달·별.
+  // Normalize recognized order cores before deriving the shorthand/tree so a
+  // slot-order change cannot turn a valid tree into an invalid one.
+  const orderCores = cores
+    .filter((core) => findArkGridOrderCoreDefinition(core.name) !== null)
+    .sort((left, right) => {
+      const leftType = findArkGridOrderCoreDefinition(left.name)?.type;
+      const rightType = findArkGridOrderCoreDefinition(right.name)?.type;
+      return (
+        ARK_GRID_ORDER_CORE_TYPES.indexOf(leftType ?? "해") -
+        ARK_GRID_ORDER_CORE_TYPES.indexOf(rightType ?? "해")
+      );
+    });
+  const nonOrderCores = cores.filter(
+    (core) => findArkGridOrderCoreDefinition(core.name) === null,
+  );
+  const normalizedCores = [...orderCores, ...nonOrderCores];
   const candidates = ["Effects", "ArkGridEffects", "Cores", "Nodes"];
   const effects = candidates
     .flatMap((key) => mapArkEffects(record[key], key.toLocaleLowerCase()))
@@ -434,13 +452,13 @@ export function mapArkGrid(value: unknown): ArkGridProfile {
         ) === index,
     );
   const orderNames =
-    cores.length >= 3
-      ? cores.slice(0, 3).map((core) => core.name)
+    normalizedCores.length >= 3
+      ? normalizedCores.slice(0, 3).map((core) => core.name)
       : effects.slice(0, 3).map((effect) => effect.name);
   const coreNumbers = orderNames.map(arkGridOrderCoreNumber);
   const shorthand =
     coreNumbers.length === 3 && coreNumbers.every((number) => number !== null)
       ? coreNumbers.join("")
       : null;
-  return { cores, effects, shorthand };
+  return { cores: normalizedCores, effects, shorthand };
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import packageJson from "../../package.json";
 import {
   FormEvent,
   Fragment,
@@ -100,6 +101,8 @@ import azenaBuffIcon from "@/img/Azenabuff.png";
 import vulnerableAttributeBuffIcon from "@/img/취약속성buff.png";
 import engravingValues from "@/data/engraving-outgoing-damage.json";
 import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
+
+const appVersion = packageJson.version;
 
 type MainMenu = "simulation" | "comparison" | "api";
 type SimulationTab = "기본 장비" | "스킬 & 전투 사이클";
@@ -329,6 +332,8 @@ function buildUnifiedCombatSnapshot(
   wineFood: boolean,
   azenaBuff: boolean,
   vulnerableAttribute = false,
+  criticalRateSynergyEnabled = false,
+  criticalRateSynergyValue = "",
 ) {
   const classEngraving = glavierClassEngraving(character);
   const attributes = character.initialCombatAttributes
@@ -395,6 +400,10 @@ function buildUnifiedCombatSnapshot(
     engravings: character.engravingDetails,
     stoneEffects,
     arkGridCores: character.arkGrid.cores,
+    synergyRate:
+      criticalRateSynergyEnabled && criticalRateSynergyValue !== ""
+        ? Math.min(30, Math.max(0, Number(criticalRateSynergyValue))) / 100
+        : 0,
   });
   const criticalDamage = createCriticalDamageSnapshot({
     accessories: character.equipment.filter((item) =>
@@ -607,6 +616,8 @@ const simTabs: SimulationTab[] = ["기본 장비", "스킬 & 전투 사이클"];
 const SAVED_SETTINGS_KEY = "glavier-dps-simulator:saved-settings";
 const API_KEY_STORAGE_KEY = "glavier-dps-simulator:lostark-api-key";
 const gearGrades = ["결단", "전율"] as const;
+const esterWeaponGrades = ["참월 : 의"] as const;
+const esterWeaponEnhancementLevels = [10, 9, 8] as const;
 const armGauntletGrades = ["영웅", "전설", "유물", "고대"] as const;
 const enhancementLevels = Array.from({ length: 16 }, (_, index) => 25 - index);
 const gauntletEnhancementLevels = Array.from(
@@ -947,9 +958,16 @@ function GearEditor({
   onChange: (patch: Partial<EquipmentProfile>) => void;
 }) {
   const isArmGauntlet = item.slot === "완갑";
-  const grades = isArmGauntlet ? armGauntletGrades : gearGrades;
+  const isEsterWeapon = item.slot === "무기";
+  const grades: string[] = isArmGauntlet
+    ? [...armGauntletGrades]
+    : isEsterWeapon
+      ? [...gearGrades, ...esterWeaponGrades]
+      : [...gearGrades];
   const selectableEnhancements = isArmGauntlet
     ? (gauntletLevelRange[item.simulationGrade] ?? gauntletEnhancementLevels)
+    : item.simulationGrade === "참월 : 의"
+      ? [...esterWeaponEnhancementLevels]
     : enhancementLevels;
   return (
     <article className="gear-editor">
@@ -968,11 +986,11 @@ function GearEditor({
           value={
             isArmGauntlet
               ? armGauntletGrades.includes(
-                  item.simulationGrade as (typeof armGauntletGrades)[number],
-                )
+                item.simulationGrade as (typeof armGauntletGrades)[number],
+              )
                 ? item.simulationGrade
                 : "영웅"
-              : gearGrades.includes(
+              : grades.includes(
                     item.simulationGrade as (typeof gearGrades)[number],
                   )
                 ? item.simulationGrade
@@ -985,6 +1003,8 @@ function GearEditor({
               simulationGrade: grade,
               ...(isArmGauntlet
                 ? { enhancement: gauntletLevelRange[grade]?.[0] ?? 0 }
+                : grade === "참월 : 의"
+                  ? { enhancement: 10 }
                 : {}),
             });
           }}
@@ -2971,6 +2991,10 @@ export default function Home() {
   const [wineFood, setWineFood] = useState(false);
   const [azenaBuff, setAzenaBuff] = useState(false);
   const [vulnerableAttribute, setVulnerableAttribute] = useState(false);
+  const [criticalRateSynergyEnabled, setCriticalRateSynergyEnabled] =
+    useState(false);
+  const [criticalRateSynergyValue, setCriticalRateSynergyValue] =
+    useState("");
   const [menu, setMenu] = useState<MainMenu>("simulation");
   const [tab, setTab] = useState<SimulationTab>("기본 장비");
   const [apiKey, setApiKey] = useState("");
@@ -3020,6 +3044,8 @@ export default function Home() {
             wineFood,
             azenaBuff,
             vulnerableAttribute,
+            criticalRateSynergyEnabled,
+            criticalRateSynergyValue,
           )
         : null,
     [
@@ -3033,6 +3059,46 @@ export default function Home() {
       wineFood,
       azenaBuff,
       vulnerableAttribute,
+      criticalRateSynergyEnabled,
+      criticalRateSynergyValue,
+    ],
+  );
+  const braceletFreeSnapshot = useMemo(
+    () =>
+      character
+        ? buildUnifiedCombatSnapshot(
+            {
+              ...character,
+              equipment: character.equipment.filter(
+                (item) => item.slot !== "팔찌",
+              ),
+            },
+            avatarGrades,
+            stoneEffects,
+            gems,
+            supportRageBuff,
+            banquetBuff,
+            blessingFood,
+            wineFood,
+            azenaBuff,
+            vulnerableAttribute,
+            criticalRateSynergyEnabled,
+            criticalRateSynergyValue,
+          )
+        : null,
+    [
+      character,
+      avatarGrades,
+      stoneEffects,
+      gems,
+      supportRageBuff,
+      banquetBuff,
+      blessingFood,
+      wineFood,
+      azenaBuff,
+      vulnerableAttribute,
+      criticalRateSynergyEnabled,
+      criticalRateSynergyValue,
     ],
   );
   function applyProfile(profile: CharacterProfile) {
@@ -3186,17 +3252,22 @@ export default function Home() {
    * 단일 계산 모델: UI 상태를 한 번의 내부 스냅샷으로 고정하고, 디버그와 스킬 UI는
    * 여기서 산출한 결과만 읽는다. API 원본은 applyProfile 단계의 초기값 생성에만 쓰인다.
    */
-  const unifiedSimulation = useMemo(() => {
-    if (!character || !sharedCombatSnapshot) return null;
+  const buildSimulationForSnapshot = (
+    simulationSnapshot: NonNullable<typeof sharedCombatSnapshot>,
+    includeBracelet = true,
+  ) => {
+    if (!character) return null;
     const evolutionRank =
       character.arkPassive.points.find((point) => point.name === "진화")
         ?.rank ?? null;
     const evolutionLevel = (name: string) =>
       character.arkPassive.evolution.find((effect) => effect.name === name)
         ?.level ?? 0;
-    const braceletCooldownIncrease = braceletCooldownIncreaseRate(
-      character.equipment.find((item) => item.slot === "팔찌"),
-    );
+    const braceletCooldownIncrease = includeBracelet
+      ? braceletCooldownIncreaseRate(
+          character.equipment.find((item) => item.slot === "팔찌"),
+        )
+      : 0;
     const skills = Object.fromEntries(
       visibleSkills.flatMap((skill) => {
         if (!GLAVIER_SKILL_BY_NAME[skill.name]) return [];
@@ -3205,66 +3276,66 @@ export default function Home() {
         const calculation = calculateSingleSkillDamage({
           base: {
             primaryStat: 6,
-            weaponAttack: sharedCombatSnapshot.finalAttackPower ** 2,
-            criticalRate: sharedCombatSnapshot.criticalRate,
+            weaponAttack: simulationSnapshot.finalAttackPower ** 2,
+            criticalRate: simulationSnapshot.criticalRate,
           },
           effects: [
             {
               id: "enlightenment-incoming-damage",
               label: "연가 표식",
               bucket: "incomingDamage",
-              value: sharedCombatSnapshot.incomingDamageMultiplier - 1,
+              value: simulationSnapshot.incomingDamageMultiplier - 1,
               source: { system: "arkPassive" },
             },
             {
               id: "bracelet-defense-reduction",
               label: "팔찌 방어력 감소",
               bucket: "defenseReduction",
-              value: sharedCombatSnapshot.defenseReductionRate,
+              value: simulationSnapshot.defenseReductionRate,
               source: { system: "bracelet" },
             },
           ],
-          target: { defense: sharedCombatSnapshot.targetDefense },
+          target: { defense: simulationSnapshot.targetDefense },
           snapshot: {
-            finalAttackPower: sharedCombatSnapshot.finalAttackPower,
+            finalAttackPower: simulationSnapshot.finalAttackPower,
             criticalDamageMultiplier:
-              sharedCombatSnapshot.criticalDamageMultiplier,
+              simulationSnapshot.criticalDamageMultiplier,
             criticalOutgoingMultiplier:
-              sharedCombatSnapshot.criticalOutgoingMultiplier,
+              simulationSnapshot.criticalOutgoingMultiplier,
             additionalDamageMultiplier:
-              1 + sharedCombatSnapshot.additionalDamageSnapshot.total / 100,
+              1 + simulationSnapshot.additionalDamageSnapshot.total / 100,
             specificTypeDamageMultiplier:
-              1 + sharedCombatSnapshot.specificTypeDamageSnapshot.total / 100,
+              1 + simulationSnapshot.specificTypeDamageSnapshot.total / 100,
             cardAttributeDamageMultiplier:
-              sharedCombatSnapshot.cardAttributeDamageSnapshot.totalMultiplier,
+              simulationSnapshot.cardAttributeDamageSnapshot.totalMultiplier,
             commonEnemyDamageMultiplier:
-              sharedCombatSnapshot.enemyDamageSnapshot.totalMultiplier,
+              simulationSnapshot.enemyDamageSnapshot.totalMultiplier,
             backAttackSkillDamageMultiplier:
-              sharedCombatSnapshot.backAttackDamageSnapshot.skillMultiplier,
+              simulationSnapshot.backAttackDamageSnapshot.skillMultiplier,
             backAttackSuccessDamageMultiplier:
-              sharedCombatSnapshot.backAttackDamageSnapshot.successMultiplier,
+              simulationSnapshot.backAttackDamageSnapshot.successMultiplier,
             focusSkillDamageMultiplier:
-              sharedCombatSnapshot.focusSkillDamageMultiplier,
+              simulationSnapshot.focusSkillDamageMultiplier,
             flurrySkillDamageMultiplier:
-              sharedCombatSnapshot.flurrySkillDamageMultiplier,
+              simulationSnapshot.flurrySkillDamageMultiplier,
             manaSkillDamageMultiplier:
-              sharedCombatSnapshot.conditionalSkillDamageSnapshot.manaSkill
+              simulationSnapshot.conditionalSkillDamageSnapshot.manaSkill
                 .totalMultiplier,
             holdingCastingSkillDamageMultiplier:
-              sharedCombatSnapshot.conditionalSkillDamageSnapshot
+              simulationSnapshot.conditionalSkillDamageSnapshot
                 .holdingCastingSkill.totalMultiplier,
             superChargeSkillDamageMultiplier:
-              sharedCombatSnapshot.conditionalSkillDamageSnapshot
+              simulationSnapshot.conditionalSkillDamageSnapshot
                 .superChargeSkill.totalMultiplier,
             arkGridOrderSkillEffects:
-              sharedCombatSnapshot.arkGridOrderSkillEffects,
+              simulationSnapshot.arkGridOrderSkillEffects,
           },
           evolutionContext: {
             evolution: character.arkPassive.evolution,
             enlightenment: character.arkPassive.enlightenment,
             evolutionRank,
-            attackSpeedPercent: sharedCombatSnapshot.attackSpeedPercent,
-            moveSpeedPercent: sharedCombatSnapshot.moveSpeedPercent,
+            attackSpeedPercent: simulationSnapshot.attackSpeedPercent,
+            moveSpeedPercent: simulationSnapshot.moveSpeedPercent,
             supportRageBuff,
           },
           leapEffects: character.arkPassive.leap,
@@ -3299,7 +3370,7 @@ export default function Home() {
                   calculation.arkGridOrder.cooldownFlatSeconds,
                 [
                   cooldownGemReductionRate(skillGems),
-                  sharedCombatSnapshot.combatAttributes["신속"].internalTotal *
+                  simulationSnapshot.combatAttributes["신속"].internalTotal *
                     0.000215,
                   manaCooldownReduction,
                   evolutionLevel("최적화 훈련") * 0.04,
@@ -3327,8 +3398,22 @@ export default function Home() {
         cooldown: ReturnType<typeof resolveGlavierSkillCooldown>;
       }
     >;
-    return { snapshot: sharedCombatSnapshot, skills };
-  }, [character, gems, sharedCombatSnapshot, supportRageBuff, visibleSkills]);
+    return { snapshot: simulationSnapshot, skills };
+  };
+  const unifiedSimulation = useMemo(
+    () =>
+      character && sharedCombatSnapshot
+        ? buildSimulationForSnapshot(sharedCombatSnapshot)
+        : null,
+    [character, gems, sharedCombatSnapshot, supportRageBuff, visibleSkills],
+  );
+  const braceletFreeSimulation = useMemo(
+    () =>
+      braceletFreeSnapshot
+        ? buildSimulationForSnapshot(braceletFreeSnapshot, false)
+        : null,
+    [character, gems, braceletFreeSnapshot, supportRageBuff, visibleSkills],
+  );
   useEffect(() => {
     if (!character || !unifiedSimulation) return;
     const preset = cyclePresets[0] ?? null;
@@ -3386,8 +3471,10 @@ export default function Home() {
     Number.isFinite(selectedCycleSeconds)
       ? selectedCycleSeconds
       : 0;
-  const cycleDamageRows = (() => {
-    if (!unifiedSimulation || cycle.length === 0) return [];
+  const calculateCycleDamageRows = (
+    simulation: typeof unifiedSimulation,
+  ) => {
+    if (!simulation || cycle.length === 0) return [];
     const rows = new Map<
       string,
       { skillName: string; count: number; totalDamage: number }
@@ -3397,7 +3484,7 @@ export default function Home() {
         (candidate) => candidate.name === entry.skillName,
       );
       if (!skill) return;
-      const simulationSkill = unifiedSimulation.skills[skill.id];
+      const simulationSkill = simulation.skills[skill.id];
       if (!simulationSkill) return;
       const ratios = cycleSkillRatioSettings[skill.name] ?? {
         backAttackRate: "0",
@@ -3436,11 +3523,27 @@ export default function Home() {
       ...row,
       averageDamage: row.totalDamage / row.count,
     }));
-  })();
+  };
+  const cycleDamageRows = calculateCycleDamageRows(unifiedSimulation);
+  const braceletFreeCycleDamageRows =
+    calculateCycleDamageRows(braceletFreeSimulation);
   const expectedDps =
     cycleSeconds > 0 && cycleDamageRows.length > 0
       ? cycleDamageRows.reduce((total, row) => total + row.totalDamage, 0) /
         cycleSeconds
+      : null;
+  const braceletFreeExpectedDps =
+    cycleSeconds > 0 && braceletFreeCycleDamageRows.length > 0
+      ? braceletFreeCycleDamageRows.reduce(
+          (total, row) => total + row.totalDamage,
+          0,
+        ) / cycleSeconds
+      : null;
+  const braceletEfficiency =
+    expectedDps !== null &&
+    braceletFreeExpectedDps !== null &&
+    braceletFreeExpectedDps > 0
+      ? (expectedDps / braceletFreeExpectedDps - 1) * 100
       : null;
   function exportDebugJson() {
     if (!character || !sharedCombatSnapshot) return;
@@ -3825,7 +3928,7 @@ export default function Home() {
           <span className="brand-mark">G</span>
           <div>
             <strong>창술사 DPS</strong>
-            <small>시뮬레이터</small>
+            <small>시뮬레이터 · v{appVersion}</small>
           </div>
         </div>
         <nav className="main-menu">
@@ -4023,8 +4126,12 @@ export default function Home() {
                     </strong>
                   </div>
                   <div>
-                    <span>쿨타임 감소</span>
-                    <strong>{commonCooldownReductionPercent.toFixed(2)}%</strong>
+                    <span>팔찌 효율</span>
+                    <strong>
+                      {braceletEfficiency === null
+                        ? "계산 준비 중"
+                        : `${braceletEfficiency.toFixed(2)}%`}
+                    </strong>
                   </div>
                   <div className="profile-api-combat-power">
                     <span>전투력 · API</span>
@@ -4124,6 +4231,37 @@ export default function Home() {
                   >
                     <Artwork icon={vulnerableAttributeBuffIcon.src} label="취" />
                   </span>
+                </label>
+                <label className="critical-rate-synergy-control">
+                  <input
+                    type="checkbox"
+                    checked={criticalRateSynergyEnabled}
+                    onChange={(event) =>
+                      setCriticalRateSynergyEnabled(event.target.checked)
+                    }
+                  />
+                  <span>치확</span>
+                  <input
+                    aria-label="치명타 적중률 시너지"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="0.1"
+                    value={criticalRateSynergyValue}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (nextValue === "") {
+                        setCriticalRateSynergyValue("");
+                        return;
+                      }
+                      const numericValue = Number(nextValue);
+                      if (!Number.isFinite(numericValue)) return;
+                      setCriticalRateSynergyValue(
+                        String(Math.min(30, Math.max(0, numericValue))),
+                      );
+                    }}
+                  />
+                  <span>%</span>
                 </label>
               </aside>
               <aside className="floating-cycle-ratio-panel">
@@ -4618,10 +4756,6 @@ export default function Home() {
                       <div className="section-heading">
                         <div>
                           <h2>전투 사이클 구성 ({cycle.length}개)</h2>
-                          <p>
-                            스킬을 추가한 뒤 위·아래로 이동해 사용 순서를
-                            만드세요.
-                          </p>
                         </div>
                       </div>
                       <div className="cycle-add">
@@ -4697,6 +4831,18 @@ export default function Home() {
                             ))}
                           </select>
                         </div>
+                        <button
+                          type="button"
+                          className="cycle-clear-button"
+                          onClick={() => {
+                            manualCycleEditRef.current = true;
+                            setCyclePresetId("");
+                            setCycle([]);
+                          }}
+                          disabled={cycle.length === 0}
+                        >
+                          전체 스킬 제거
+                        </button>
                         <div className="cycle-duration-controls">
                           <label className="cycle-duration-option">
                             <input
