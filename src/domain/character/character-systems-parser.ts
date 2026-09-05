@@ -1,4 +1,13 @@
-import type { LostArkGem, LostArkGems, LostArkSkill } from "@/types/lostark-api";
+import type {
+  LostArkGem,
+  LostArkGems,
+  LostArkSkill,
+} from "@/types/lostark-api";
+import {
+  ARK_GRID_ORDER_CORE_TYPES,
+  arkGridOrderCoreNumber,
+  arkGridOrderCoreOptions,
+} from "@/data/ark-grid-order-core-catalog";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -66,16 +75,22 @@ export type SkillProfile = {
   gems: GemProfile[];
 };
 
-export type AvatarProfile = { id: string; slot: string; name: string; icon: string | null; grade: string | null };
+export type AvatarProfile = {
+  id: string;
+  slot: string;
+  name: string;
+  icon: string | null;
+  grade: string | null;
+};
 
-export const GLAVIER_ORDER_CORE_OPTIONS = [
-  ["적룡의 기운", "적룡연격", "연가 창식"],
-  ["일점 집중", "집중 강화", "청룡기"],
-  ["진화의 끝", "한 점 돌파", "맹룡 회도"],
-] as const;
+export const GLAVIER_ORDER_CORE_OPTIONS = ARK_GRID_ORDER_CORE_TYPES.map(
+  arkGridOrderCoreOptions,
+);
 
 function asRecord(value: unknown): UnknownRecord | null {
-  return value && typeof value === "object" && !Array.isArray(value) ? value as UnknownRecord : null;
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as UnknownRecord)
+    : null;
 }
 
 function asArray(value: unknown) {
@@ -117,7 +132,8 @@ function tooltipLines(tooltip?: string) {
   function collect(item: unknown) {
     if (typeof item === "string") strings.push(item);
     else if (Array.isArray(item)) item.forEach(collect);
-    else if (item && typeof item === "object") Object.values(item as UnknownRecord).forEach(collect);
+    else if (item && typeof item === "object")
+      Object.values(item as UnknownRecord).forEach(collect);
   }
   collect(value);
   return strings
@@ -163,7 +179,9 @@ function mapArkEffects(value: unknown, prefix: string) {
         level: firstNumber(record, ["Level", "Rank", "Stage"]),
         grade: firstString(record, ["Grade", "Rarity"]),
         icon: firstString(record, ["Icon", "Image"]) ?? null,
-        description: plainText(firstString(record, ["Description", "Tooltip", "Detail"])),
+        description: plainText(
+          firstString(record, ["Description", "Tooltip", "Detail"]),
+        ),
       };
     })
     .filter((item): item is ArkEffectProfile => item !== null);
@@ -177,7 +195,9 @@ function findEffectArray(record: UnknownRecord, keys: string[]) {
 }
 
 function normalizePassiveEffect(effect: ArkEffectProfile) {
-  const match = effect.description?.match(/^(진화|깨달음|도약)\s*\d?티어\s+(.+?)(?:\s+Lv\.(\d+))?$/);
+  const match = effect.description?.match(
+    /^(진화|깨달음|도약)\s*\d?티어\s+(.+?)(?:\s+Lv\.(\d+))?$/,
+  );
   if (!match) return effect;
   return {
     ...effect,
@@ -187,27 +207,43 @@ function normalizePassiveEffect(effect: ArkEffectProfile) {
 }
 
 function gemType(name: string) {
-  return ["겁화", "작열", "멸화", "홍염"].find((type) => name.includes(type)) ?? "보석";
+  return (
+    ["겁화", "작열", "멸화", "홍염"].find((type) => name.includes(type)) ??
+    "보석"
+  );
 }
 
 function gemTooltipInfo(tooltip?: string) {
   const lines = tooltipLines(tooltip);
   if (!lines?.length) return { skill: null, effect: null };
-  const effect = lines.find((line) => /\[[^\]]+\].*(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(line))
-    ?? lines.find((line) => /(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(line))
-    ?? null;
+  const effect =
+    lines.find((line) =>
+      /\[[^\]]+\].*(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(
+        line,
+      ),
+    ) ??
+    lines.find((line) =>
+      /(?:피해량?|재사용 대기시간|쿨타임).*?(?:증가|감소)/.test(line),
+    ) ??
+    null;
   if (!effect) return { skill: null, effect: lines.join(" · ") };
-  const match = effect.match(/(?:\[[^\]]+\]\s*)?(.+?)\s+(?:피해량?|재사용 대기시간|쿨타임)/);
+  const match = effect.match(
+    /(?:\[[^\]]+\]\s*)?(.+?)\s+(?:피해량?|재사용 대기시간|쿨타임)/,
+  );
   return { skill: match?.[1].trim() ?? null, effect };
 }
 
-export function mapGems(gems: LostArkGems | LostArkGem[] | null | undefined): GemProfile[] {
-  const gemItems = Array.isArray(gems) ? gems : gems?.Gems ?? [];
-  const effectItems = Array.isArray(gems) ? [] : gems?.Effects ?? [];
+export function mapGems(
+  gems: LostArkGems | LostArkGem[] | null | undefined,
+): GemProfile[] {
+  const gemItems = Array.isArray(gems) ? gems : (gems?.Gems ?? []);
+  const effectItems = Array.isArray(gems) ? [] : (gems?.Effects ?? []);
   return gemItems.map((gem, index) => {
     const info = gemTooltipInfo(gem.Tooltip);
     const effect = effectItems[index];
-    const fallbackEffect = plainText(effect?.Description ?? effect?.Tooltip ?? null);
+    const fallbackEffect = plainText(
+      effect?.Description ?? effect?.Tooltip ?? null,
+    );
     const fallbackSkill = effect?.Name?.replace(/\s*(효과|보석)$/g, "") ?? null;
     return {
       id: `gem-${index}-${gem.Name ?? "unknown"}`,
@@ -222,14 +258,22 @@ export function mapGems(gems: LostArkGems | LostArkGem[] | null | undefined): Ge
   });
 }
 
-export function mapSkills(skills: LostArkSkill[] | null | undefined, gems: GemProfile[]): SkillProfile[] {
+export function mapSkills(
+  skills: LostArkSkill[] | null | undefined,
+  gems: GemProfile[],
+): SkillProfile[] {
   return (skills ?? []).map((skill, index) => ({
     id: `skill-${index}-${skill.Name ?? "unknown"}`,
     name: skill.Name ?? "이름 없는 스킬",
     level: skill.Level ?? 0,
     type: skill.Type ?? skill.SkillType ?? "일반",
     icon: skill.Icon ?? null,
-    tripods: (skill.Tripods ?? []).filter((tripod) => tripod.IsSelected !== false).map((tripod) => ({ name: tripod.Name ?? "트라이포드", level: tripod.Level ?? null })),
+    tripods: (skill.Tripods ?? [])
+      .filter((tripod) => tripod.IsSelected !== false)
+      .map((tripod) => ({
+        name: tripod.Name ?? "트라이포드",
+        level: tripod.Level ?? null,
+      })),
     rune: skill.Rune?.Name ?? null,
     gems: gems.filter((gem) => gem.skill === skill.Name),
   }));
@@ -237,18 +281,36 @@ export function mapSkills(skills: LostArkSkill[] | null | undefined, gems: GemPr
 
 export function mapAvatars(value: unknown): AvatarProfile[] {
   const record = asRecord(value);
-  const items = Array.isArray(value) ? value : asArray(record?.Avatars ?? record?.Items);
-  return items.map((item, index): AvatarProfile | null => {
-    const avatar = asRecord(item);
-    const slot = avatar ? firstString(avatar, ["Type", "Slot"]) : null;
-    if (!avatar || !slot) return null;
-    return { id: `avatar-${index}-${slot}`, slot, name: firstString(avatar, ["Name"]) ?? "아바타", icon: firstString(avatar, ["Icon", "Image"]), grade: firstString(avatar, ["Grade"]) };
-  }).filter((item): item is AvatarProfile => item !== null);
+  const items = Array.isArray(value)
+    ? value
+    : asArray(record?.Avatars ?? record?.Items);
+  return items
+    .map((item, index): AvatarProfile | null => {
+      const avatar = asRecord(item);
+      const slot = avatar ? firstString(avatar, ["Type", "Slot"]) : null;
+      if (!avatar || !slot) return null;
+      return {
+        id: `avatar-${index}-${slot}`,
+        slot,
+        name: firstString(avatar, ["Name"]) ?? "아바타",
+        icon: firstString(avatar, ["Icon", "Image"]),
+        grade: firstString(avatar, ["Grade"]),
+      };
+    })
+    .filter((item): item is AvatarProfile => item !== null);
 }
 
 export function mapArkPassive(value: unknown): ArkPassiveProfile {
   const record = asRecord(value);
-  if (!record) return { isActive: false, points: [], evolution: [], enlightenment: [], leap: [], effects: [] };
+  if (!record)
+    return {
+      isActive: false,
+      points: [],
+      evolution: [],
+      enlightenment: [],
+      leap: [],
+      effects: [],
+    };
   const points = findEffectArray(record, ["Points", "Point"])
     .map((item): ArkPointProfile | null => {
       const point = asRecord(item);
@@ -256,67 +318,129 @@ export function mapArkPassive(value: unknown): ArkPassiveProfile {
       if (!point || !name) return null;
       const description = firstString(point, ["Description"]);
       const rankLevel = description?.match(/(\d+)\s*랭크\s*(\d+)\s*레벨/);
-      return { name, value: String(point.Value ?? point.Level ?? "-"), rank: rankLevel ? Number(rankLevel[1]) : null, level: rankLevel ? Number(rankLevel[2]) : null, description };
+      return {
+        name,
+        value: String(point.Value ?? point.Level ?? "-"),
+        rank: rankLevel ? Number(rankLevel[1]) : null,
+        level: rankLevel ? Number(rankLevel[2]) : null,
+        description,
+      };
     })
     .filter((item): item is ArkPointProfile => item !== null);
 
-  const directEvolution = mapArkEffects(findEffectArray(record, ["EvolutionEffects", "Evolution"]), "evolution");
-  const directEnlightenment = mapArkEffects(findEffectArray(record, ["EnlightenmentEffects", "Enlightenment"]), "enlightenment");
-  const directLeap = mapArkEffects(findEffectArray(record, ["LeapEffects", "Leap"]), "leap");
-  const commonEffects = mapArkEffects(findEffectArray(record, ["Effects", "ArkPassiveEffects"]), "effect");
-  const commonByPath = (path: string) => commonEffects.filter((effect) => effect.name === path).map(normalizePassiveEffect);
+  const directEvolution = mapArkEffects(
+    findEffectArray(record, ["EvolutionEffects", "Evolution"]),
+    "evolution",
+  );
+  const directEnlightenment = mapArkEffects(
+    findEffectArray(record, ["EnlightenmentEffects", "Enlightenment"]),
+    "enlightenment",
+  );
+  const directLeap = mapArkEffects(
+    findEffectArray(record, ["LeapEffects", "Leap"]),
+    "leap",
+  );
+  const commonEffects = mapArkEffects(
+    findEffectArray(record, ["Effects", "ArkPassiveEffects"]),
+    "effect",
+  );
+  const commonByPath = (path: string) =>
+    commonEffects
+      .filter((effect) => effect.name === path)
+      .map(normalizePassiveEffect);
 
   return {
     isActive: record.IsArkPassive === true || record.IsActive === true,
     points,
     evolution: directEvolution.length ? directEvolution : commonByPath("진화"),
-    enlightenment: directEnlightenment.length ? directEnlightenment : commonByPath("깨달음"),
+    enlightenment: directEnlightenment.length
+      ? directEnlightenment
+      : commonByPath("깨달음"),
     leap: directLeap.length ? directLeap : commonByPath("도약"),
-    effects: commonEffects.filter((effect) => !["진화", "깨달음", "도약"].includes(effect.name)),
+    effects: commonEffects.filter(
+      (effect) => !["진화", "깨달음", "도약"].includes(effect.name),
+    ),
   };
 }
 
 export function mapArkGrid(value: unknown): ArkGridProfile {
-  if (Array.isArray(value)) return { cores: [], effects: mapArkEffects(value, "grid"), shorthand: null };
+  if (Array.isArray(value))
+    return {
+      cores: [],
+      effects: mapArkEffects(value, "grid"),
+      shorthand: null,
+    };
   const record = asRecord(value);
   if (!record) return { cores: [], effects: [], shorthand: null };
   const slots = findEffectArray(record, ["Slots", "Cores", "Nodes"]);
-  const cores = slots.map((item, index): ArkGridCoreProfile | null => {
-    const slot = asRecord(item);
-    if (!slot) return null;
-    const core = nestedRecord(slot, ["Core", "Data", "Item"]) ?? slot;
-    const description = plainText(firstString(core, ["Description", "Tooltip", "Detail"]) ?? firstString(slot, ["Description", "Tooltip", "Detail"]));
-    const rawName = firstString(core, ["Name", "CoreName", "Title"]) ?? firstString(slot, ["Name", "CoreName", "Title"]);
-    const name = rawName?.replace(/^(?:질서|혼돈)의?\s*(?:해|달|별)\s*코어\s*:\s*/, "").trim();
-    const point = firstNumber(slot, ["Point", "Points", "TotalPoint", "Value"])
-      ?? firstNumber(core, ["Point", "Points", "TotalPoint", "Value"])
-      ?? Number(description?.match(/(\d+)\s*P/i)?.[1] ?? NaN);
-    const normalizedPoint = Number.isFinite(point) ? point : null;
-    const explicitLevel = firstNumber(slot, ["Level", "Rank", "Stage"])
-      ?? firstNumber(core, ["Level", "Rank", "Stage"])
-      ?? Number(description?.match(/Lv\.\s*(\d+)/i)?.[1] ?? NaN);
-    const level = Number.isFinite(explicitLevel)
-      ? explicitLevel
-      : normalizedPoint === null ? null : normalizedPoint >= 20 ? 3 : normalizedPoint >= 17 ? 2 : normalizedPoint >= 14 ? 1 : 0;
-    if (!name && normalizedPoint === null) return null;
-    return {
-      id: `core-${index}-${name ?? "unknown"}`,
-      name: name ?? `${index < 3 ? "질서" : "혼돈"} 코어 ${index + 1}`,
-      grade: firstString(core, ["Grade", "Rarity"]) ?? firstString(slot, ["Grade", "Rarity"]),
-      point: normalizedPoint,
-      level,
-      icon: firstString(core, ["Icon", "Image"]) ?? firstString(slot, ["Icon", "Image"]),
-      description,
-    };
-  }).filter((item): item is ArkGridCoreProfile => item !== null);
+  const cores = slots
+    .map((item, index): ArkGridCoreProfile | null => {
+      const slot = asRecord(item);
+      if (!slot) return null;
+      const core = nestedRecord(slot, ["Core", "Data", "Item"]) ?? slot;
+      const description = plainText(
+        firstString(core, ["Description", "Tooltip", "Detail"]) ??
+          firstString(slot, ["Description", "Tooltip", "Detail"]),
+      );
+      const rawName =
+        firstString(core, ["Name", "CoreName", "Title"]) ??
+        firstString(slot, ["Name", "CoreName", "Title"]);
+      const name = rawName
+        ?.replace(/^(?:질서|혼돈)의?\s*(?:해|달|별)\s*코어\s*:\s*/, "")
+        .trim();
+      const point =
+        firstNumber(slot, ["Point", "Points", "TotalPoint", "Value"]) ??
+        firstNumber(core, ["Point", "Points", "TotalPoint", "Value"]) ??
+        Number(description?.match(/(\d+)\s*P/i)?.[1] ?? NaN);
+      const normalizedPoint = Number.isFinite(point) ? point : null;
+      const explicitLevel =
+        firstNumber(slot, ["Level", "Rank", "Stage"]) ??
+        firstNumber(core, ["Level", "Rank", "Stage"]) ??
+        Number(description?.match(/Lv\.\s*(\d+)/i)?.[1] ?? NaN);
+      const level = Number.isFinite(explicitLevel)
+        ? explicitLevel
+        : normalizedPoint === null
+          ? null
+          : normalizedPoint >= 20
+            ? 3
+            : normalizedPoint >= 17
+              ? 2
+              : normalizedPoint >= 14
+                ? 1
+                : 0;
+      if (!name && normalizedPoint === null) return null;
+      return {
+        id: `core-${index}-${name ?? "unknown"}`,
+        name: name ?? `${index < 3 ? "질서" : "혼돈"} 코어 ${index + 1}`,
+        grade:
+          firstString(core, ["Grade", "Rarity"]) ??
+          firstString(slot, ["Grade", "Rarity"]),
+        point: normalizedPoint,
+        level,
+        icon:
+          firstString(core, ["Icon", "Image"]) ??
+          firstString(slot, ["Icon", "Image"]),
+        description,
+      };
+    })
+    .filter((item): item is ArkGridCoreProfile => item !== null);
   const candidates = ["Effects", "ArkGridEffects", "Cores", "Nodes"];
   const effects = candidates
     .flatMap((key) => mapArkEffects(record[key], key.toLocaleLowerCase()))
-    .filter((item, index, values) => values.findIndex((value) => value.name === item.name && value.level === item.level) === index);
-  const orderNames = cores.length >= 3 ? cores.slice(0, 3).map((core) => core.name) : effects.slice(0, 3).map((effect) => effect.name);
-  const optionIndexes = orderNames.map((name, index) => GLAVIER_ORDER_CORE_OPTIONS[index]?.findIndex((option) => option === name) ?? -1);
-  const shorthand = optionIndexes.length === 3 && optionIndexes.every((optionIndex) => optionIndex >= 0)
-    ? optionIndexes.map((optionIndex) => optionIndex + 1).join("")
-    : null;
+    .filter(
+      (item, index, values) =>
+        values.findIndex(
+          (value) => value.name === item.name && value.level === item.level,
+        ) === index,
+    );
+  const orderNames =
+    cores.length >= 3
+      ? cores.slice(0, 3).map((core) => core.name)
+      : effects.slice(0, 3).map((effect) => effect.name);
+  const coreNumbers = orderNames.map(arkGridOrderCoreNumber);
+  const shorthand =
+    coreNumbers.length === 3 && coreNumbers.every((number) => number !== null)
+      ? coreNumbers.join("")
+      : null;
   return { cores, effects, shorthand };
 }

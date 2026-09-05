@@ -2,11 +2,21 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  applyCooldownReductionRates,
   getGlavierSkill,
   getGlavierSkillLevelCoefficient,
   getGlavierSkillMotionMultiplier,
   resolveGlavierSkillCooldown,
 } from "../../src/domain/skill/glavier-skill-catalog.ts";
+
+test("쿨타임 정량 변화 이후의 보석·신속·아크 패시브 쿨감은 독립 곱연산한다", () => {
+  const result = applyCooldownReductionRates(20, [0.24, 0.215, 0.14, 0.08, 0.1]);
+  assert.equal(result, 20 * 0.76 * 0.785 * 0.86 * 0.92 * 0.9);
+});
+
+test("팔찌 쿨타임 증가는 쿨감 원천과 독립적인 증가 배율로 곱한다", () => {
+  assert.equal(applyCooldownReductionRates(20, [0.24, -0.02]), 20 * 0.76 * 1.02);
+});
 
 test("시트 카탈로그는 적룡포의 기본 쿨타임과 스킬 태그를 보존한다", () => {
   const skill = getGlavierSkill("적룡포");

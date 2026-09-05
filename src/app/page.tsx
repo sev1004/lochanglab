@@ -1,6 +1,13 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  FormEvent,
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   mapCharacterResponse,
   type CharacterProfile,
@@ -38,20 +45,31 @@ import {
 } from "@/domain/bracelet/bracelet-catalog";
 import { arkGridGemPercent } from "@/data/ark-grid-gem-values";
 import { resolveArkGridCommonCoreEffects } from "@/data/ark-grid-common-core";
+import {
+  findArkGridOrderCoreDefinition,
+  type GlavierClassEngraving,
+} from "@/data/ark-grid-order-core-catalog";
+import { resolveArkGridOrderSkillEffects } from "@/data/ark-grid-order-skill-effects";
 import { GLAVIER_SKILL_TRIPODS } from "@/data/glavier-skill-tripods";
 import { GLAVIER_SKILL_TRIPOD_DETAILS } from "@/data/glavier-skill-tripod-details";
 import {
   calculateSingleSkillDamage,
+  DEFAULT_TARGET_DEFENSE,
   type SingleSkillCalculationResult,
 } from "@/domain/combat/combat-engine";
 import { GLAVIER_SKILL_BY_NAME } from "@/data/generated/glavier-skill-data";
-import { resolveGlavierSkillCooldown } from "@/domain/skill/glavier-skill-catalog";
+import {
+  applyCooldownReductionRates,
+  getGlavierSkill,
+  resolveGlavierSkillCooldown,
+} from "@/domain/skill/glavier-skill-catalog";
 import { createInternalGearSnapshot } from "@/domain/combat/internal-gear-snapshot";
 import {
   createAdditionalDamageSnapshot,
   createSpecificTypeDamageSnapshot,
   createCardAttributeDamageSnapshot,
   createBackAttackDamageSnapshot,
+  createConditionalSkillDamageSnapshot,
   createEngravingOutgoingDamageSnapshot,
   createEnemyDamageSnapshot,
   FOCUS_SKILL_DAMAGE_PER_SPECIALIZATION_PERCENT,
@@ -75,10 +93,36 @@ import {
 } from "@/domain/combat/t5-evolution";
 import melhaGemIcon from "@/img/10level_a.png";
 import hongyeomGemIcon from "@/img/10level_c.png";
+import pcBuffIcon from "@/img/pcbuff.png";
+import blessingBuffIcon from "@/img/에아달린축복buff.png";
+import wineBuffIcon from "@/img/베르닐와인buff.png";
+import azenaBuffIcon from "@/img/Azenabuff.png";
+import vulnerableAttributeBuffIcon from "@/img/취약속성buff.png";
 import engravingValues from "@/data/engraving-outgoing-damage.json";
+import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
 
 type MainMenu = "simulation" | "comparison" | "api";
-type SimulationTab = "전체" | "기본 장비" | "스킬 & 전투 사이클";
+type SimulationTab = "기본 장비" | "스킬 & 전투 사이클";
+type CycleEntry = {
+  id: string;
+  skillName: string;
+  azureDragon: boolean;
+  yeongaSimGong: boolean;
+};
+type CyclePreset = {
+  id: string;
+  label: string;
+  entries: readonly Pick<CycleEntry, "skillName" | "azureDragon" | "yeongaSimGong">[];
+  guidanceSeconds?: number;
+};
+type CycleDurationMode = "guideline" | "manual";
+type CycleSkillRatioSettings = Record<
+  string,
+  {
+    backAttackRate: string;
+    cooldownRate: string;
+  }
+>;
 type SavedSetting = {
   id: string;
   name: string;
@@ -102,11 +146,179 @@ function selectableTripodCountForSkillLevel(level: number) {
 function activeTripodNamesForSkill(skill: SkillProfile) {
   const limit = selectableTripodCountForSkillLevel(skill.level);
   return Array.from({ length: 3 }, (_, index) =>
-    index < limit ? skill.tripods[index]?.name ?? "없음" : "없음",
+    index < limit ? (skill.tripods[index]?.name ?? "없음") : "없음",
   );
 }
 
-function buildSkillSnapshotValues(
+function glavierClassEngraving(
+  character: CharacterProfile,
+): GlavierClassEngraving | null {
+  const text = [
+    character.buildName,
+    ...character.arkPassive.enlightenment.map(
+      (effect) => `${effect.name} ${effect.description ?? ""}`,
+    ),
+  ].join(" ");
+  if (text.includes("절제")) return "절제";
+  if (text.includes("절정")) return "절정";
+  return null;
+}
+
+function formatApiCombatPower(value: CharacterProfile["apiCombatPower"]) {
+  if (value === null) return "API 미제공";
+  const numericValue = Number(String(value).replaceAll(",", ""));
+  return Number.isFinite(numericValue)
+    ? Math.floor(numericValue).toLocaleString()
+    : String(value);
+}
+
+const normalJeoljeongFirstRound = [
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "반월섬", azureDragon: true, yeongaSimGong: false },
+  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+  { skillName: "유성강천", azureDragon: false, yeongaSimGong: false },
+  { skillName: "적룡필살", azureDragon: false, yeongaSimGong: true },
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: false },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const normalJeoljeongRedDragonRound = [
+  ...normalJeoljeongFirstRound.slice(0, 4),
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: true },
+  ...normalJeoljeongFirstRound.slice(6),
+] as const;
+const normalJeoljeongCycleEntries = [
+  ...normalJeoljeongFirstRound,
+  ...normalJeoljeongRedDragonRound,
+  ...normalJeoljeongRedDragonRound,
+] as const;
+const bluntJeoljeongFirstRound = [
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "유성강천", azureDragon: true, yeongaSimGong: false },
+  { skillName: "적룡필살", azureDragon: true, yeongaSimGong: true },
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: false },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const bluntJeoljeongFollowupRound = [
+  { skillName: "반월섬", azureDragon: false, yeongaSimGong: false },
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+  { skillName: "유성강천", azureDragon: true, yeongaSimGong: false },
+  { skillName: "적룡포", azureDragon: true, yeongaSimGong: true },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const bluntJeoljeongCycleEntries = [
+  ...bluntJeoljeongFirstRound,
+  ...bluntJeoljeongFollowupRound,
+  ...bluntJeoljeongFollowupRound,
+  { skillName: "반월섬", azureDragon: false, yeongaSimGong: false },
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+] as const;
+const manaJeoljeongFirstRound = bluntJeoljeongFirstRound;
+const manaJeoljeongFollowupRound = [
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "반월섬", azureDragon: true, yeongaSimGong: false },
+  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+  { skillName: "유성강천", azureDragon: false, yeongaSimGong: false },
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: true },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const manaJeoljeongCycleEntries = [
+  ...manaJeoljeongFirstRound,
+  ...manaJeoljeongFollowupRound,
+  ...manaJeoljeongFollowupRound,
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "반월섬", azureDragon: true, yeongaSimGong: false },
+  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+] as const;
+const jeoljeong222FirstRound = [
+  { skillName: "반월섬", azureDragon: false, yeongaSimGong: false },
+  { skillName: "회선창", azureDragon: false, yeongaSimGong: false },
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "유성강천", azureDragon: true, yeongaSimGong: false },
+  { skillName: "적룡필살", azureDragon: true, yeongaSimGong: true },
+  { skillName: "적룡포", azureDragon: true, yeongaSimGong: false },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const jeoljeong222BlueDragonRound = [
+  { skillName: "청룡출수", azureDragon: false, yeongaSimGong: false },
+  { skillName: "선풍참혼", azureDragon: false, yeongaSimGong: true },
+  { skillName: "유성강천", azureDragon: false, yeongaSimGong: false },
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: true },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const jeoljeong222RedDragonRound = [
+  { skillName: "반월섬", azureDragon: false, yeongaSimGong: true },
+  { skillName: "회선창", azureDragon: false, yeongaSimGong: false },
+  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
+  { skillName: "유성강천", azureDragon: true, yeongaSimGong: false },
+  { skillName: "적룡포", azureDragon: true, yeongaSimGong: true },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const jeoljeong222CycleEntries = [
+  ...jeoljeong222FirstRound,
+  ...jeoljeong222BlueDragonRound,
+  ...jeoljeong222RedDragonRound,
+  ...jeoljeong222BlueDragonRound,
+  ...jeoljeong222RedDragonRound,
+  ...jeoljeong222BlueDragonRound,
+  ...jeoljeong222RedDragonRound,
+] as const;
+
+function createCyclePresets(
+  classEngraving: GlavierClassEngraving | null,
+  shorthand: string | null,
+  hasBluntEdge: boolean,
+  hasManaFurnace: boolean,
+): CyclePreset[] {
+  if (classEngraving !== "절정") return [];
+  const normalCores = new Set(["113", "111", "122"]);
+  const bluntCores = new Set(["333", "323", "322", "331", "332"]);
+  if (shorthand === "222") {
+    return [
+      {
+        id: "jeoljeong-222",
+        label: "절정 222 기본 사이클 (47개)",
+        entries: jeoljeong222CycleEntries,
+      },
+    ];
+  }
+  if (hasManaFurnace && shorthand === "333") {
+    return [
+      {
+        id: "jeoljeong-mana",
+        label: "절정 333 · 마나 용광로 기본 사이클 (23개)",
+        entries: manaJeoljeongCycleEntries,
+      },
+    ];
+  }
+  if (hasBluntEdge && bluntCores.has(shorthand ?? "")) {
+    return [
+      {
+        id: "jeoljeong-blunt",
+        label: "절정 · 뭉툭한 가시 기본 사이클 (23개)",
+        entries: bluntJeoljeongCycleEntries,
+      },
+    ];
+  }
+  if (!normalCores.has(shorthand ?? "")) return [];
+  return [
+    {
+      id: "jeoljeong-normal",
+      label: "절정 기본 사이클 (22개)",
+      entries: normalJeoljeongCycleEntries,
+    },
+  ];
+}
+
+function buildUnifiedCombatSnapshot(
   character: CharacterProfile,
   avatarGrades: Record<string, string>,
   stoneEffects: StoneEffect[],
@@ -118,20 +330,40 @@ function buildSkillSnapshotValues(
   azenaBuff: boolean,
   vulnerableAttribute = false,
 ) {
+  const classEngraving = glavierClassEngraving(character);
   const attributes = character.initialCombatAttributes
-    ? createCurrentCombatAttributeSnapshots({ baseline: character.initialCombatAttributes, evolution: character.arkPassive.evolution, braceletStats: combatAttributeInput(character).braceletStats })
+    ? createCurrentCombatAttributeSnapshots({
+        baseline: character.initialCombatAttributes,
+        evolution: character.arkPassive.evolution,
+        braceletStats: combatAttributeInput(character).braceletStats,
+      })
     : createCombatAttributeSnapshots(combatAttributeInput(character));
-  const speed = buildSpeedSnapshotValues(character, supportRageBuff, banquetBuff, blessingFood, wineFood, attributes["신속"].internalTotal);
-  const combatStats = createCombatStatSnapshot({ equipment: character.equipment, avatarGrades, azenaBonus: azenaBuff ? 6000 : 0 });
+  const speed = buildSpeedSnapshotValues(
+    character,
+    supportRageBuff,
+    banquetBuff,
+    blessingFood,
+    wineFood,
+    attributes["신속"].internalTotal,
+  );
+  const combatStats = createCombatStatSnapshot({
+    equipment: character.equipment,
+    avatarGrades,
+    azenaBonus: azenaBuff ? 6000 : 0,
+  });
   const weaponAttack = createWeaponAttackSnapshot({
     equipment: character.equipment,
     banquetBonus: banquetBuff ? 1600 : 0,
     arkGridCores: character.arkGrid.cores,
     enlightenmentRate: enlightenmentWeaponAttackRate(
-      character.arkPassive.points.find((point) => point.name === "깨달음")?.level ?? 0,
+      character.arkPassive.points.find((point) => point.name === "깨달음")
+        ?.level ?? 0,
     ),
   });
-  const pureAttackPower = createPureAttackPowerSnapshot(combatStats.total, weaponAttack.total);
+  const pureAttackPower = createPureAttackPowerSnapshot(
+    combatStats.total,
+    weaponAttack.total,
+  );
   const internalGearSnapshot = createInternalGearSnapshot(character.equipment);
   const baseAttackPower = createBaseAttackPowerSnapshot({
     pureAttackPower: pureAttackPower.total,
@@ -155,7 +387,9 @@ function buildSkillSnapshotValues(
   });
   const criticalRate = createCriticalRateOptionSnapshot({
     criticalStat,
-    accessories: character.equipment.filter((item) => ["목걸이", "귀걸이", "반지"].includes(item.slot)),
+    accessories: character.equipment.filter((item) =>
+      ["목걸이", "귀걸이", "반지"].includes(item.slot),
+    ),
     bracelet: character.equipment.find((item) => item.slot === "팔찌"),
     evolution: character.arkPassive.evolution,
     engravings: character.engravingDetails,
@@ -163,7 +397,9 @@ function buildSkillSnapshotValues(
     arkGridCores: character.arkGrid.cores,
   });
   const criticalDamage = createCriticalDamageSnapshot({
-    accessories: character.equipment.filter((item) => ["목걸이", "귀걸이", "반지"].includes(item.slot)),
+    accessories: character.equipment.filter((item) =>
+      ["목걸이", "귀걸이", "반지"].includes(item.slot),
+    ),
     bracelet: character.equipment.find((item) => item.slot === "팔찌"),
     enlightenment: character.arkPassive.enlightenment,
     engravings: character.engravingDetails,
@@ -176,8 +412,11 @@ function buildSkillSnapshotValues(
     arkGridCores: character.arkGrid.cores,
   });
   const additionalDamage = createAdditionalDamageSnapshot({
-    weaponQuality: character.equipment.find((item) => item.slot === "무기")?.quality ?? 0,
-    accessories: character.equipment.filter((item) => ["목걸이", "귀걸이", "반지"].includes(item.slot)),
+    weaponQuality:
+      character.equipment.find((item) => item.slot === "무기")?.quality ?? 0,
+    accessories: character.equipment.filter((item) =>
+      ["목걸이", "귀걸이", "반지"].includes(item.slot),
+    ),
     evolution: character.arkPassive.evolution,
     bracelet: character.equipment.find((item) => item.slot === "팔찌"),
     arkGridCores: character.arkGrid.cores,
@@ -186,29 +425,44 @@ function buildSkillSnapshotValues(
   const specificTypeDamage = createSpecificTypeDamageSnapshot({
     bracelet: character.equipment.find((item) => item.slot === "팔찌"),
   });
-  const cardAttributeDamage = createCardAttributeDamageSnapshot(vulnerableAttribute);
-  const backAttackDamage = createBackAttackDamageSnapshot(character.engravingDetails);
+  const cardAttributeDamage =
+    createCardAttributeDamageSnapshot(vulnerableAttribute);
+  const backAttackDamage = createBackAttackDamageSnapshot(
+    character.engravingDetails,
+    character.equipment.find((item) => item.slot === "팔찌"),
+  );
   const engravingOutgoingDamage = createEngravingOutgoingDamageSnapshot({
+    engravings: character.engravingDetails,
+    stoneEffects,
+  });
+  const conditionalSkillDamage = createConditionalSkillDamageSnapshot({
     engravings: character.engravingDetails,
     stoneEffects,
   });
   const enemyDamage = createEnemyDamageSnapshot({
     engravings: character.engravingDetails,
     stoneEffects,
-    accessories: character.equipment.filter((item) => ["목걸이", "귀걸이", "반지"].includes(item.slot)),
+    accessories: character.equipment.filter((item) =>
+      ["목걸이", "귀걸이", "반지"].includes(item.slot),
+    ),
     bracelet: character.equipment.find((item) => item.slot === "팔찌"),
     arkGridCores: character.arkGrid.cores,
     arkGridEffects: character.arkGrid.effects,
     enlightenment: character.arkPassive.enlightenment,
     moveSpeedPercent: speed.moveSpeedPercent,
+    classEngraving,
   });
-  const braceletDefenseReduction = (character.equipment.find((item) => item.slot === "팔찌")?.options ?? [])
-    .reduce((total, text) => {
-      const definition = findBraceletOption(text);
-      return total + (definition?.modifiers
+  const braceletDefenseReduction = (
+    character.equipment.find((item) => item.slot === "팔찌")?.options ?? []
+  ).reduce((total, text) => {
+    const definition = findBraceletOption(text);
+    return (
+      total +
+      (definition?.modifiers
         .filter((modifier) => modifier.type === "enemyDefenseReductionPct")
-        .reduce((sum, modifier) => sum + modifier.value / 100, 0) ?? 0);
-    }, 0);
+        .reduce((sum, modifier) => sum + modifier.value / 100, 0) ?? 0)
+    );
+  }, 0);
   return {
     combatAttributes: attributes,
     internalGearSnapshot,
@@ -224,27 +478,37 @@ function buildSkillSnapshotValues(
     cardAttributeDamageSnapshot: cardAttributeDamage,
     backAttackDamageSnapshot: backAttackDamage,
     engravingOutgoingDamageSnapshot: engravingOutgoingDamage,
+    conditionalSkillDamageSnapshot: conditionalSkillDamage,
     enemyDamageSnapshot: enemyDamage,
+    arkGridOrderSkillEffects: resolveArkGridOrderSkillEffects(
+      character.arkGrid.cores,
+      classEngraving,
+    ),
     focusSkillDamageMultiplier:
-      1 + (attributes["특화"].internalTotal * FOCUS_SKILL_DAMAGE_PER_SPECIALIZATION_PERCENT) / 100,
+      1 +
+      (attributes["특화"].internalTotal *
+        FOCUS_SKILL_DAMAGE_PER_SPECIALIZATION_PERCENT) /
+        100,
     flurrySkillDamageMultiplier: FLURRY_SKILL_DAMAGE_MULTIPLIER,
     finalAttackPower: finalAttackPower.total,
     criticalRate: criticalRate.total,
     criticalDamageMultiplier: criticalDamage.total,
     criticalOutgoingMultiplier: criticalOutgoing.total,
-    outgoingDamageMultiplier:
-      (1 + (additionalDamage.total + specificTypeDamage.total) / 100) *
-      cardAttributeDamage.totalMultiplier * enemyDamage.totalMultiplier,
     attackSpeedPercent: speed.attackSpeedPercent,
     moveSpeedPercent: speed.moveSpeedPercent,
-    targetDefense: 9641.89184990511,
+    targetDefense: DEFAULT_TARGET_DEFENSE,
     defenseReductionRate: braceletDefenseReduction,
     incomingDamageMultiplier:
-      1 + (character.arkPassive.enlightenment
-        .find((effect) => effect.name === "연가표식")?.level ?? 0) * 0.012,
+      1 +
+      (character.arkPassive.enlightenment.find(
+        (effect) => effect.name === "연가표식",
+      )?.level ?? 0) *
+        0.012,
     evolution: baseEvolutionDamageRate({
       evolution: character.arkPassive.evolution,
-      evolutionRank: character.arkPassive.points.find((point) => point.name === "진화")?.rank,
+      evolutionRank: character.arkPassive.points.find(
+        (point) => point.name === "진화",
+      )?.rank,
       attackSpeedPercent: speed.attackSpeedPercent,
       moveSpeedPercent: speed.moveSpeedPercent,
       supportRageBuff,
@@ -264,32 +528,73 @@ function buildSpeedSnapshotValues(
   const bracelet = character.equipment.find((item) => item.slot === "팔찌");
   const braceletSpeed = (bracelet?.options ?? []).reduce((total, text) => {
     const definition = findBraceletOption(text);
-    return total + (definition?.modifiers
-      .filter((modifier) => modifier.type === "attackMoveSpeedPct")
-      .reduce((sum, modifier) => sum + modifier.value * 6, 0) ?? 0);
+    return (
+      total +
+      (definition?.modifiers
+        .filter((modifier) => modifier.type === "attackMoveSpeedPct")
+        .reduce((sum, modifier) => sum + modifier.value * 6, 0) ?? 0)
+    );
   }, 0);
-  const speedEngravingLevels = engravingValues.speed["정기 흡수"] as Record<string, number>;
-  const speedStoneLevels = engravingValues.speed["정기 흡수Stone"] as Record<string, number>;
+  const speedEngravingLevels = engravingValues.speed["정기 흡수"] as Record<
+    string,
+    number
+  >;
+  const speedStoneLevels = engravingValues.speed["정기 흡수Stone"] as Record<
+    string,
+    number
+  >;
   const engravings = character.engravingDetails.reduce((total, engraving) => {
     if (engraving.name !== "정기 흡수") return total;
-    return total + (engraving.grade === "전설" ? speedEngravingLevels.전설4 : speedEngravingLevels[`유물${engraving.level}`] ?? 0);
+    return (
+      total +
+      (engraving.grade === "전설"
+        ? speedEngravingLevels.전설4
+        : (speedEngravingLevels[`유물${engraving.level}`] ?? 0))
+    );
   }, 0);
   const stone = character.engravingDetails.reduce((total, engraving) => {
     if (engraving.name !== "정기 흡수") return total;
     return total + (speedStoneLevels[String(engraving.abilityStoneLevel)] ?? 0);
   }, 0);
-  const massIncrease = character.engravingDetails.some((engraving) => engraving.name === "질량 증가")
+  const massIncrease = character.engravingDetails.some(
+    (engraving) => engraving.name === "질량 증가",
+  )
     ? engravingValues.speed["질량 증가"]
     : 0;
-  const destructionTrain = (character.arkPassive.evolution.find((effect) => effect.name === "파괴 전차")?.level ?? 0) * 4;
+  const destructionTrain =
+    (character.arkPassive.evolution.find(
+      (effect) => effect.name === "파괴 전차",
+    )?.level ?? 0) * 4;
   const classBonus = character.buildName.includes("절정") ? 15 : 0;
-  const gridEffects = character.arkGrid.cores.flatMap((core) => resolveArkGridCommonCoreEffects(core));
-  const gridAttackSpeed = gridEffects.filter((effect) => effect.effect === "attackSpeed").reduce((total, effect) => total + (effect.value ?? 0), 0);
-  const gridMoveSpeed = gridEffects.filter((effect) => effect.effect === "movementSpeed").reduce((total, effect) => total + (effect.value ?? 0), 0);
-  const common = swiftness * 0.01716 + (supportRageBuff ? 9 : 0) + (banquetBuff ? 5 : 0) + braceletSpeed + engravings + stone + classBonus;
+  const gridEffects = character.arkGrid.cores.flatMap((core) =>
+    resolveArkGridCommonCoreEffects(core),
+  );
+  const gridAttackSpeed = gridEffects
+    .filter((effect) => effect.effect === "attackSpeed")
+    .reduce((total, effect) => total + (effect.value ?? 0), 0);
+  const gridMoveSpeed = gridEffects
+    .filter((effect) => effect.effect === "movementSpeed")
+    .reduce((total, effect) => total + (effect.value ?? 0), 0);
+  const common =
+    swiftness * 0.01716 +
+    (supportRageBuff ? 9 : 0) +
+    (banquetBuff ? 5 : 0) +
+    braceletSpeed +
+    engravings +
+    stone +
+    classBonus;
   const attackFood = blessingFood ? 3 : 0;
   const moveFood = wineFood ? 3 : 0;
-  return { attackSpeedPercent: 100 + common + gridAttackSpeed + destructionTrain + massIncrease + attackFood, moveSpeedPercent: 100 + common + gridMoveSpeed + moveFood };
+  return {
+    attackSpeedPercent:
+      100 +
+      common +
+      gridAttackSpeed +
+      destructionTrain +
+      massIncrease +
+      attackFood,
+    moveSpeedPercent: 100 + common + gridMoveSpeed + moveFood,
+  };
 }
 
 const errors: Record<number, string> = {
@@ -298,7 +603,7 @@ const errors: Record<number, string> = {
   404: "캐릭터를 찾을 수 없습니다.",
   429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
 };
-const simTabs: SimulationTab[] = ["전체", "기본 장비", "스킬 & 전투 사이클"];
+const simTabs: SimulationTab[] = ["기본 장비", "스킬 & 전투 사이클"];
 const SAVED_SETTINGS_KEY = "glavier-dps-simulator:saved-settings";
 const API_KEY_STORAGE_KEY = "glavier-dps-simulator:lostark-api-key";
 const gearGrades = ["결단", "전율"] as const;
@@ -362,6 +667,44 @@ function normalizeGem(gem: GemProfile): GemProfile {
       : "겁화";
   const normalized = { ...gem, type, level };
   return { ...normalized, icon: gemDisplayIcon(normalized) };
+}
+function cooldownGemReductionRate(gems: readonly GemProfile[]) {
+  return gems.reduce((highestRate, gem) => {
+    // 홍염은 현재 계산 입력으로 받지 않으므로 계산에 포함하지 않는다.
+    if (gem.name.includes("홍염")) return highestRate;
+    const isCooldownGem =
+      gem.type === "작열" ||
+      (isRadiantGem(gem) && /재사용 대기시간|쿨타임/.test(gem.effect ?? ""));
+    if (!isCooldownGem || gem.level === null) return highestRate;
+    const rate = Math.max(0, 0.24 - (10 - gem.level) * 0.02);
+    return Math.max(highestRate, rate);
+  }, 0);
+}
+function braceletCooldownIncreaseRate(bracelet: EquipmentProfile | undefined) {
+  return (bracelet?.options ?? []).reduce((total, option) => {
+    const catalogRate = findBraceletOption(option)?.modifiers
+      .filter((modifier) => modifier.type === "skillCooldownIncreasePct")
+      .reduce((sum, modifier) => sum + modifier.value / 100, 0);
+    if (catalogRate) return total + catalogRate;
+    const textRate = Number(option.match(/쿨\s*\+\s*([\d.]+)%/)?.[1] ?? 0);
+    return total + textRate / 100;
+  }, 0);
+}
+function commonCooldownReductionRate(source: {
+  swiftness: number;
+  evolution: readonly ArkEffectProfile[];
+  bracelet?: EquipmentProfile;
+}) {
+  const levelOf = (name: string) =>
+    source.evolution.find((effect) => effect.name === name)?.level ?? 0;
+  const multiplier = applyCooldownReductionRates(1, [
+    source.swiftness * 0.000215,
+    (levelOf("끝없는 마나") + levelOf("무한한 마력")) * 0.07,
+    levelOf("최적화 훈련") * 0.04,
+    levelOf("타이밍 지배") * 0.05,
+    -braceletCooldownIncreaseRate(source.bracelet),
+  ]);
+  return 1 - multiplier;
 }
 const avatarSlots = ["무기", "머리", "상의", "하의"] as const;
 const accessoryOptions = [
@@ -435,7 +778,10 @@ const enlightenmentEffects: Record<
     description: "집중 스탠스 적에게 주는 피해 +8.33%/Lv",
   },
   연가표식: { maxLevel: 5, description: "연가 표식 대상이 받는 피해 +1.2%/Lv" },
-  연가심공: { maxLevel: 3, description: "다음 스킬 피해 +25%/Lv" },
+  연가심공: {
+    maxLevel: enlightenmentSkillEffects["연가심공"].maxLevel,
+    description: `다음 스킬 피해 +${enlightenmentSkillEffects["연가심공"].damagePerLevelPercent}%/Lv`,
+  },
   "치명적인 베기": { maxLevel: 5, description: "난무 스킬 치명타 피해 +4%/Lv" },
   "강력한 찌르기": {
     maxLevel: 5,
@@ -1221,191 +1567,6 @@ function GemBoard({
     </section>
   );
 }
-function SkillEditor({
-  skill,
-  gems,
-  combatBase,
-  onChange,
-  onGemChange,
-  onRemoveGem,
-  onAddGem,
-}: {
-  skill: SkillProfile;
-  gems: GemProfile[];
-  combatBase: { attackPower: number; criticalRate: number };
-  evolution: ArkEffectProfile[];
-  evolutionRank: number | null;
-  attackSpeedPercent: number;
-  moveSpeedPercent: number;
-  supportRageBuff: boolean;
-  onChange: (patch: Partial<SkillProfile>) => void;
-  onGemChange: (id: string, patch: Partial<GemProfile>) => void;
-  onRemoveGem: (id: string) => void;
-  onAddGem: (type: "겁화" | "작열") => void;
-}) {
-  const tripods = Array.from(
-    { length: 3 },
-    (_, index) => skill.tripods[index] ?? { name: "없음", level: null },
-  );
-  const catalog =
-    GLAVIER_SKILL_TRIPODS[skill.name as keyof typeof GLAVIER_SKILL_TRIPODS];
-  const details = GLAVIER_SKILL_TRIPOD_DETAILS[skill.name] ?? [];
-  const selectedTripodNames = tripods.map((tripod) => tripod.name);
-  const cooldown = resolveGlavierSkillCooldown({
-    skillName: skill.name,
-    selectedTripodNames,
-  });
-  const calculation = calculateSingleSkillDamage({
-    base: {
-      primaryStat: 6,
-      weaponAttack: combatBase.attackPower ** 2,
-      criticalRate: combatBase.criticalRate,
-    },
-    effects: [],
-    skill: { name: skill.name, level: skill.level, selectedTripodNames },
-  });
-  const orderedGems = [...gems].sort(
-    (a, b) => (a.type === "겁화" ? 0 : 1) - (b.type === "겁화" ? 0 : 1),
-  );
-  return (
-    <article className="skill-card skill-editor">
-      <Artwork icon={skill.icon} label="✦" />
-      <strong className="skill-name">{skill.name}</strong>
-      <select
-        className="skill-level-select"
-        aria-label={`${skill.name} 레벨`}
-        value={skill.level}
-        onChange={(event) => onChange({ level: Number(event.target.value) })}
-      >
-        {skillLevels.map((level) => (
-          <option value={level} key={level}>
-            Lv.{level}
-          </option>
-        ))}
-      </select>
-      <div className="skill-tripod-selects">
-        {tripods.map((tripod, index) => {
-          const options = [
-            ...new Set([tripod.name, ...(catalog?.[index] ?? [])]),
-          ];
-          const detail = details.find(
-            (item) => item.tier === index + 1 && item.name === tripod.name,
-          );
-          return (
-            <div
-              className="skill-tripod-tooltip"
-              data-tooltip={detail?.description ?? tripod.name}
-              key={`${tripod.name}-${index}`}
-            >
-              <select
-                aria-label={`${skill.name} 트라이포드 ${index + 1}`}
-                value={tripod.name}
-                onChange={(event) =>
-                  onChange({
-                    tripods: tripods.map((item, itemIndex) =>
-                      itemIndex === index
-                        ? {
-                            ...item,
-                            name: event.target.value,
-                            level:
-                              event.target.value === "없음" ? null : item.level,
-                          }
-                        : item,
-                    ),
-                  })
-                }
-              >
-                {options.map((option) => (
-                  <option value={option} key={option}>
-                    {option}
-                    {option === tripod.name && tripod.level
-                      ? ` Lv.${tripod.level}`
-                      : ""}
-                  </option>
-                ))}
-              </select>
-            </div>
-          );
-        })}
-      </div>
-      <div className="skill-gem-inline">
-        {gemTypes.map((type) => {
-          const gem = orderedGems.find((candidate) => candidate.type === type);
-          return gem ? (
-            <div className="skill-gem-slot" key={gem.id}>
-              <Artwork icon={gemDisplayIcon(gem)} label="◆" />
-              <select
-                aria-label={`${type} 보석 종류`}
-                value={gem.type}
-                onChange={(event) =>
-                  onGemChange(gem.id, { type: event.target.value })
-                }
-              >
-                {gemTypes.map((gemType) => (
-                  <option key={gemType}>{gemType}</option>
-                ))}
-              </select>
-              <select
-                aria-label={`${type} 보석 레벨`}
-                value={gem.level ?? 10}
-                onChange={(event) =>
-                  onGemChange(gem.id, { level: Number(event.target.value) })
-                }
-              >
-                {gemLevels.map((level) => (
-                  <option value={level} key={level}>
-                    {level}
-                  </option>
-                ))}
-              </select>
-              <button
-                type="button"
-                className="skill-gem-remove"
-                onClick={() => onRemoveGem(gem.id)}
-                aria-label="보석 삭제"
-              >
-                ×
-              </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="skill-gem-add-slot"
-              key={`gem-add-${type}`}
-              onClick={() => onAddGem(type)}
-            >
-              {type} 보석 추가
-            </button>
-          );
-        })}
-      </div>
-      <div className="skill-metrics" aria-label={`${skill.name} 전투 데이터`}>
-        <div>
-          <span>
-            스킬 쿨타임{" "}
-            <b>{cooldown ? `${cooldown.cooldownSeconds.toFixed(1)}초` : "-"}</b>
-          </span>
-          <span>
-            치명타 확률{" "}
-            <b>{`${(calculation.combat.stages.criticalRate * 100).toFixed(2)}%`}</b>
-          </span>
-        </div>
-        <div>
-          <span>
-            최대 대미지{" "}
-            <b>
-              {Math.floor(calculation.maximumCriticalDamage).toLocaleString()}
-            </b>
-          </span>
-          <span>
-            평균 대미지{" "}
-            <b>{Math.floor(calculation.expectedDamage).toLocaleString()}</b>
-          </span>
-        </div>
-      </div>
-    </article>
-  );
-}
 function SkillEditorV2({
   skill,
   gems,
@@ -1463,6 +1624,32 @@ function SkillEditorV2({
     : 0;
   const criticalRate = calculation.combat.stages.criticalRate;
   const isBackAttackSkill = calculation.evolution.isBackAttackSkill;
+  const defaultScenario = calculation.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  );
+  const azureDragonScenario = calculation.scenarios.find(
+    (scenario) =>
+      scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  );
+  const defaultBackAttackScenario = calculation.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  );
+  const azureDragonBackAttackScenario = calculation.scenarios.find(
+    (scenario) =>
+      scenario.conditions.azureDragonBuff &&
+      scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  );
+  const backAttackDisplayScenario =
+    defaultBackAttackScenario ?? defaultScenario;
   const displayGemTypes =
     skill.name === "맹룡난무" || skill.name === "적룡필살"
       ? []
@@ -1499,16 +1686,19 @@ function SkillEditorV2({
         <div className="skill-title-column">
           <strong className="skill-name">{skill.name}</strong>
           <span className="skill-tripod-multiplier">
-            트라이포드 배율 ×{(
-              calculation.tripodDamageMultiplier
-              * calculation.awakeningDamageMultiplier
+            트라이포드 배율 ×
+            {(
+              calculation.tripodDamageMultiplier *
+              calculation.awakeningDamageMultiplier
             ).toFixed(3)}
           </span>
           <span className="skill-tripod-effect">
-            치명타 확률 +{(
-              (criticalRateBonus + calculation.awakeningCriticalRateBonus)
-              * 100
-            ).toFixed(1)}%
+            치명타 확률 +
+            {(
+              (criticalRateBonus + calculation.awakeningCriticalRateBonus) *
+              100
+            ).toFixed(1)}
+            %
           </span>
           <span className="skill-tripod-effect">
             치명타 피해 +{(criticalDamageBonus * 100).toFixed(1)}%
@@ -1616,41 +1806,41 @@ function SkillEditorV2({
         <div className="skill-core-metrics">
           <span>
             스킬 쿨타임{" "}
-            <b>{cooldown ? `${cooldown.cooldownSeconds.toFixed(1)}초` : "-"}</b>
+            <b>{cooldown ? `${cooldown.cooldownSeconds.toFixed(2)}초` : "-"}</b>
           </span>
           <span>
-            치명타 확률 <b>{(criticalRate * 100).toFixed(2)}%</b>
+            <span
+              className="skill-metric-tooltip"
+              data-tooltip="백어택 기준 치명타 확률"
+            >
+              치명타 확률
+            </span>{" "}
+            <b>
+              {(
+                (backAttackDisplayScenario?.criticalRate ?? criticalRate) * 100
+              ).toFixed(2)}
+              %
+            </b>
           </span>
           <span>
             최대 대미지{" "}
             <b>
-              {Math.floor(calculation.maximumCriticalDamage).toLocaleString()}
+              {Math.floor(
+                backAttackDisplayScenario?.maximumDamage ??
+                  calculation.maximumCriticalDamage,
+              ).toLocaleString()}
             </b>
           </span>
           <span>
             평균 대미지{" "}
-            <b>{Math.floor(calculation.expectedDamage).toLocaleString()}</b>
+            <b>
+              {Math.floor(
+                backAttackDisplayScenario?.averageDamage ??
+                  calculation.expectedDamage,
+              ).toLocaleString()}
+            </b>
           </span>
         </div>
-        {isBackAttackSkill ? (
-          <div className="skill-evolution-metrics">
-            <span>
-              스킬 진화형 피해 (백){" "}
-              <b>{(calculation.evolution.withBackAttack * 100).toFixed(2)}%</b>
-            </span>
-            <span>
-              스킬 진화형 피해 (X){" "}
-              <b>{(calculation.evolution.withoutBackAttack * 100).toFixed(2)}%</b>
-            </span>
-          </div>
-        ) : (
-          <div className="skill-evolution-metrics">
-            <span>
-              스킬 진화형 피해{" "}
-              <b>{(calculation.evolution.withoutBackAttack * 100).toFixed(2)}%</b>
-            </span>
-          </div>
-        )}
       </div>
     </article>
   );
@@ -2433,31 +2623,25 @@ function coreLevel(point: number | null) {
           ? 1
           : 0;
 }
-function deriveGridShorthand(cores: ArkGridCoreProfile[]) {
-  const indexes = cores
+function deriveGridShorthand(
+  cores: ArkGridCoreProfile[],
+  classEngraving?: GlavierClassEngraving | null,
+) {
+  const definitions = cores
     .slice(0, 3)
-    .map(
-      (core, index) =>
-        GLAVIER_ORDER_CORE_OPTIONS[index]?.findIndex(
-          (option) => option === core.name,
-        ) ?? -1,
+    .map((core) => findArkGridOrderCoreDefinition(core.name));
+  const types = ["해", "달", "별"] as const;
+  const valid =
+    definitions.length === 3 &&
+    definitions.every(
+      (definition, index) =>
+        definition !== null &&
+        definition.type === types[index] &&
+        (!classEngraving || definition.classEngraving === classEngraving),
     );
-  return indexes.length === 3 && indexes.every((index) => index >= 0)
-    ? indexes.map((index) => index + 1).join("")
+  return valid
+    ? definitions.map((definition) => definition!.number).join("")
     : null;
-}
-function deriveBuildName(character: CharacterProfile) {
-  const text = character.arkPassive.enlightenment
-    .map((effect) => `${effect.name} ${effect.description ?? ""}`)
-    .join(" ");
-  const identity = text.includes("절제")
-    ? "절제"
-    : text.includes("절정")
-      ? "절정"
-      : character.buildName.split(" ")[0];
-  const shorthand =
-    deriveGridShorthand(character.arkGrid.cores) ?? character.arkGrid.shorthand;
-  return `${identity}${shorthand ? ` ${shorthand}` : ""}`;
 }
 function initialStoneEffects(profile: CharacterProfile): StoneEffect[] {
   const active = profile.engravingDetails
@@ -2539,335 +2723,221 @@ function combatAttributeInput(profile: CharacterProfile) {
   };
 }
 
+const ceilPercentToTwoDecimals = (value: number) =>
+  Math.ceil((value - Number.EPSILON) * 100) / 100;
+
 /** 단일 시뮬레이션 스냅샷의 표시 전용 뷰. 여기서는 어떤 계산도 다시 수행하지 않는다. */
 function InternalGearSnapshotDebug({
   snapshot,
+  cycleDamageRows = [],
+  onExportJson,
 }: {
-  snapshot: ReturnType<typeof buildSkillSnapshotValues>;
+  snapshot: ReturnType<typeof buildUnifiedCombatSnapshot>;
+  cycleDamageRows?: readonly {
+    skillName: string;
+    count: number;
+    totalDamage: number;
+    averageDamage: number;
+  }[];
+  onExportJson?: () => void;
 }) {
-  const ceilPercentToTwoDecimals = (value: number) =>
-    Math.ceil((value - Number.EPSILON) * 100) / 100;
   const format = (value: number | null, suffix = "") =>
     value === null ? "미등록" : value.toLocaleString() + suffix;
   return (
-    <details className="internal-gear-debug" open>
+    <details className="internal-gear-debug">
       <summary>
-        내부 장비 스냅샷 · {snapshot.internalGearSnapshot.unresolvedSlots.length
+        내부 장비 스냅샷 ·{" "}
+        {snapshot.internalGearSnapshot.unresolvedSlots.length
           ? `${snapshot.internalGearSnapshot.unresolvedSlots.length}개 미등록`
           : "검증 완료"}
       </summary>
+      <button
+        type="button"
+        className="debug-json-export-button"
+        onClick={onExportJson}
+      >
+        현재 세팅·계산 JSON 추출
+      </button>
       <div className="internal-gear-debug-summary">
-        {(["특화", "신속", "치명", "제압", "인내", "숙련"] as const).map((name) => (
-          <span key={name}>{name} <b>{snapshot.combatAttributes[name].internalTotal.toLocaleString()}</b></span>
-        ))}
-        <span>힘/민/지 최종 <b>{Math.ceil(snapshot.combatStatsSnapshot.total).toLocaleString()}</b></span>
-        <span>최종 무공 <b>{Math.floor(snapshot.weaponAttackSnapshot.total).toLocaleString()}</b></span>
-        <span>기본 공격력 <b>{Math.floor(snapshot.baseAttackPowerSnapshot.total).toLocaleString()}</b></span>
-        <span>최종 공격력 <b>{Math.floor(snapshot.finalAttackPowerSnapshot.total).toLocaleString()}</b></span>
-        <span>치적 <b>{ceilPercentToTwoDecimals(snapshot.criticalRateSnapshot.total * 100).toFixed(2)}%</b></span>
-        <span>치피 <b>{(snapshot.criticalDamageSnapshot.total * 100).toFixed(2)}%</b></span>
-        <span>치명타 주는 피해 배율 <b>{snapshot.criticalOutgoingSnapshot.total.toFixed(4)}x</b></span>
-        <span>추가 피해 <b>{snapshot.additionalDamageSnapshot.total.toFixed(2)}%</b></span>
-        <span>특정 타입 피해 <b>{snapshot.specificTypeDamageSnapshot.total.toFixed(2)}%</b></span>
-        <span>카드 속성 피해 <b>{((snapshot.cardAttributeDamageSnapshot.totalMultiplier - 1) * 100).toFixed(2)}%</b></span>
-        <span>백어택 스킬 피해 <b>{((snapshot.backAttackDamageSnapshot.totalMultiplier - 1) * 100).toFixed(2)}%</b></span>
-        <span>각인 배율 <b>{snapshot.engravingOutgoingDamageSnapshot.totalMultiplier.toFixed(4)}x</b></span>
-        <span>돌격대장 피해 <b>{snapshot.enemyDamageSnapshot.commanderDamage.toFixed(2)}%</b></span>
-        <span>악세·팔찌 배율 <b>{snapshot.enemyDamageSnapshot.accessoriesBraceletMultiplier.toFixed(4)}x</b></span>
-        <span>아크 그리드 배율 <b>{snapshot.enemyDamageSnapshot.arkGridMultiplier.toFixed(4)}x</b></span>
-        <span>깨달음 배율 <b>{snapshot.enemyDamageSnapshot.enlightenmentMultiplier.toFixed(4)}x</b></span>
-        <span>공격 속도 <b>{snapshot.attackSpeedPercent.toFixed(2)}%</b></span>
-        <span>이동 속도 <b>{snapshot.moveSpeedPercent.toFixed(2)}%</b></span>
-        <span>기본 진화형 피해 <b>{(snapshot.evolution * 100).toFixed(2)}%</b></span>
-      </div>
-      <div className="internal-gear-debug-rows">
-        {snapshot.internalGearSnapshot.rows.map((row) => (
-          <div className={row.status === "resolved" ? "" : "unresolved"} key={row.slot}>
-            <strong>{row.slot}</strong>
-            <small>{row.grade ?? "장비 없음"} · {row.itemLevel ?? "-"} · +{row.enhancement ?? 0}</small>
-            <span>스탯 {format(row.primaryStat)}</span>
-            <span>무공 {format(row.weaponAttack)}</span>
-            <span>기본공 {format(row.baseAttackFlat)}</span>
-            <span>기본공% {format(row.baseAttackRate === null ? null : row.baseAttackRate * 100, "%")}</span>
-          </div>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function LegacyInternalGearSnapshotDebug({
-  gear,
-  character,
-  avatarGrades,
-  stoneEffects,
-  gems,
-  sharedSnapshot,
-  supportRageBuff = false,
-  banquetBuff = false,
-  blessingFood = false,
-  wineFood = false,
-  azenaBuff = false,
-}: {
-  gear: EquipmentProfile[];
-  character: CharacterProfile;
-  avatarGrades: Record<string, string>;
-  stoneEffects: StoneEffect[];
-  gems: GemProfile[];
-  sharedSnapshot?: ReturnType<typeof buildSkillSnapshotValues>;
-  supportRageBuff?: boolean;
-  banquetBuff?: boolean;
-  blessingFood?: boolean;
-  wineFood?: boolean;
-  azenaBuff?: boolean;
-}) {
-  const snapshot = createInternalGearSnapshot(gear);
-  const initialApiStat = (name: string) =>
-    (character.initialCombatAttributes as Record<string, { apiTotal: number }> | undefined)?.[name]?.apiTotal ?? 0;
-  const braceletStats = Object.fromEntries(
-    ["특화", "신속", "치명", "제압", "인내", "숙련"].map((name) => [
-      name,
-      character.equipment
-        .find((item) => item.slot === "팔찌")
-        ?.baseStats.reduce(
-          (total, value) =>
-            total +
-            Number(
-              value
-                .match(new RegExp(`^${name}\\s*\\+?([\\d,]+)`))?.[1]
-                ?.replaceAll(",", "") ?? 0,
-            ),
-          0,
-        ) ?? 0,
-    ]),
-  );
-  const combatAttributeSnapshots = character.initialCombatAttributes
-    ? createCurrentCombatAttributeSnapshots({
-        baseline: character.initialCombatAttributes,
-        evolution: character.arkPassive.evolution,
-        braceletStats,
-      })
-    : createCombatAttributeSnapshots({
-        apiTotals: {
-          특화: initialApiStat("특화"),
-          신속: initialApiStat("신속"),
-          치명: initialApiStat("치명"),
-          제압: initialApiStat("제압"),
-          인내: initialApiStat("인내"),
-          숙련: initialApiStat("숙련"),
-        },
-        evolution: character.arkPassive.evolution,
-        braceletStats,
-      });
-  const combatStats = createCombatStatSnapshot({
-    equipment: character.equipment,
-    avatarGrades,
-  });
-  const braceletCriticalStat = criticalBraceletStat(character);
-  const criticalStat = createCriticalStatSnapshot({
-    apiTotal: initialApiStat("치명"),
-    evolutionT1Level:
-      character.arkPassive.evolution.find((effect) => effect.name === "치명")
-        ?.level ?? 0,
-    braceletStat: braceletCriticalStat,
-    baselineEvolutionT1Level: character.initialCriticalStat?.evolutionT1Level,
-    baselineBraceletStat: character.initialCriticalStat?.braceletStat,
-  });
-  const criticalRateOptions = createCriticalRateOptionSnapshot({
-    criticalStat,
-    accessories: character.equipment.filter((item) =>
-      ["목걸이", "귀걸이", "반지"].includes(item.slot),
-    ),
-    bracelet: character.equipment.find((item) => item.slot === "팔찌"),
-    evolution: character.arkPassive.evolution,
-    engravings: character.engravingDetails,
-    stoneEffects,
-    arkGridCores: character.arkGrid.cores,
-  });
-  const criticalDamage = createCriticalDamageSnapshot({
-    accessories: character.equipment.filter((item) =>
-      ["목걸이", "귀걸이", "반지"].includes(item.slot),
-    ),
-    bracelet: character.equipment.find((item) => item.slot === "팔찌"),
-    enlightenment: character.arkPassive.enlightenment,
-    engravings: character.engravingDetails,
-    stoneEffects,
-    arkGridCores: character.arkGrid.cores,
-  });
-  const criticalOutgoing = createCriticalOutgoingSnapshot({
-    evolution: character.arkPassive.evolution,
-    bracelet: character.equipment.find((item) => item.slot === "팔찌"),
-    arkGridCores: character.arkGrid.cores,
-  });
-  const additionalDamage = createAdditionalDamageSnapshot({
-    weaponQuality:
-      character.equipment.find((item) => item.slot === "무기")?.quality ?? 0,
-    accessories: character.equipment.filter((item) =>
-      ["목걸이", "귀걸이", "반지"].includes(item.slot),
-    ),
-    evolution: character.arkPassive.evolution,
-    bracelet: character.equipment.find((item) => item.slot === "팔찌"),
-    arkGridCores: character.arkGrid.cores,
-    arkGridEffects: character.arkGrid.effects,
-  });
-  const baseEvolutionDamage = evolutionDamageRate({
-    evolution: character.arkPassive.evolution,
-    evolutionRank: character.arkPassive.points.find(
-      (point) => point.name === "진화",
-    )?.rank,
-    supportRageBuff,
-  });
-  const enlightenmentLevel =
-    character.arkPassive.points.find((point) => point.name === "깨달음")
-      ?.level ?? 0;
-  const weaponAttack = createWeaponAttackSnapshot({
-    equipment: character.equipment,
-    arkGridCores: character.arkGrid.cores,
-    enlightenmentRate: enlightenmentWeaponAttackRate(enlightenmentLevel),
-  });
-  const pureAttackPower = createPureAttackPowerSnapshot(
-    combatStats.total,
-    weaponAttack.total,
-  );
-  const baseAttackPower = createBaseAttackPowerSnapshot({
-    pureAttackPower: pureAttackPower.total,
-    gauntletFlat: snapshot.baseAttackFlat,
-    gauntletRate: snapshot.baseAttackRate,
-    stoneLevels: stoneEffects.map((effect) => effect.level),
-    gems,
-  });
-  const finalAttackPower = createFinalAttackPowerSnapshot({
-    baseAttackPower: baseAttackPower.total,
-    equipment: character.equipment,
-    arkGridEffects: character.arkGrid.effects,
-    arkGridCores: character.arkGrid.cores,
-    engravings: character.engravingDetails,
-    stoneEffects,
-  });
-  // 디버그 표시도 스킬 엔진과 동일한 내부 스냅샷을 사용한다.
-  const engineSnapshot = sharedSnapshot ?? buildSkillSnapshotValues(
-    character,
-    avatarGrades,
-    stoneEffects,
-    gems,
-    supportRageBuff,
-    banquetBuff,
-    blessingFood,
-    wineFood,
-    azenaBuff,
-  );
-  const ceilPercentToTwoDecimals = (value: number) =>
-    Math.ceil((value - Number.EPSILON) * 100) / 100;
-  const format = (value: number | null, suffix = "") =>
-    value === null ? "미등록" : value.toLocaleString() + suffix;
-  const debugCombatStat = (name: string) =>
-    character.equipment.reduce(
-      (total, item) =>
-        total +
-        item.baseStats.reduce(
-          (sum, value) =>
-            sum +
-            Number(
-              value
-                .match(new RegExp(`^${name}\\s*\\+?([\\d,]+)`))?.[1]
-                ?.replaceAll(",", "") ?? 0,
-            ),
-          0,
-        ),
-      0,
-    ) +
-    (character.arkPassive.evolution.find((effect) => effect.name === name)
-      ?.level ?? 0) *
-      50;
-  return (
-    <details className="internal-gear-debug" open>
-      <summary>
-        내부 장비 스냅샷 ·{" "}
-        {snapshot.unresolvedSlots.length
-          ? snapshot.unresolvedSlots.length + "개 미등록"
-          : "검증 완료"}
-      </summary>
-      <div className="internal-gear-debug-summary">
+        {(["특화", "신속", "치명", "제압", "인내", "숙련"] as const).map(
+          (name) => (
+            <span key={name}>
+              {name}{" "}
+              <b>
+                {snapshot.combatAttributes[name].internalTotal.toLocaleString()}
+              </b>
+            </span>
+          ),
+        )}
         <span>
-          특화{" "}
+          힘/민/지 최종{" "}
           <b>
-            {combatAttributeSnapshots["특화"].internalTotal.toLocaleString()}
+            {Math.ceil(snapshot.combatStatsSnapshot.total).toLocaleString()}
           </b>
         </span>
         <span>
-          신속{" "}
+          최종 무공{" "}
           <b>
-            {combatAttributeSnapshots["신속"].internalTotal.toLocaleString()}
+            {Math.floor(snapshot.weaponAttackSnapshot.total).toLocaleString()}
           </b>
-        </span>
-        <span>
-          치명{" "}
-          <b>
-            {combatAttributeSnapshots["치명"].internalTotal.toLocaleString()}
-          </b>
-        </span>
-        <span>
-          제압{" "}
-          <b>
-            {combatAttributeSnapshots["제압"].internalTotal.toLocaleString()}
-          </b>
-        </span>
-        <span>
-          인내{" "}
-          <b>
-            {combatAttributeSnapshots["인내"].internalTotal.toLocaleString()}
-          </b>
-        </span>
-        <span>
-          숙련{" "}
-          <b>
-            {combatAttributeSnapshots["숙련"].internalTotal.toLocaleString()}
-          </b>
-        </span>
-        <span>
-          힘/민/지 최종 <b>{Math.ceil(engineSnapshot.combatStatsSnapshot.total).toLocaleString()}</b>
-        </span>
-        <span>
-          최종 무공 <b>{Math.floor(engineSnapshot.weaponAttackSnapshot.total).toLocaleString()}</b>
         </span>
         <span>
           기본 공격력{" "}
-          <b>{Math.floor(engineSnapshot.baseAttackPowerSnapshot.total).toLocaleString()}</b>
+          <b>
+            {Math.floor(
+              snapshot.baseAttackPowerSnapshot.total,
+            ).toLocaleString()}
+          </b>
         </span>
         <span>
           최종 공격력{" "}
-          <b>{Math.floor(engineSnapshot.finalAttackPowerSnapshot.total).toLocaleString()}</b>
+          <b>
+            {Math.floor(
+              snapshot.finalAttackPowerSnapshot.total,
+            ).toLocaleString()}
+          </b>
         </span>
         <span>
           치적{" "}
           <b>
-            {ceilPercentToTwoDecimals(engineSnapshot.criticalRateSnapshot.total * 100).toFixed(
-              2,
-            )}
+            {ceilPercentToTwoDecimals(
+              snapshot.criticalRateSnapshot.total * 100,
+            ).toFixed(2)}
             %
           </b>
         </span>
         <span>
-          치피 <b>{(engineSnapshot.criticalDamageSnapshot.total * 100).toFixed(2)}%</b>
+          치피{" "}
+          <b>{(snapshot.criticalDamageSnapshot.total * 100).toFixed(2)}%</b>
         </span>
         <span>
-          치명타 주는 피해 배율 <b>{engineSnapshot.criticalOutgoingSnapshot.total.toFixed(4)}x</b>
+          치명타 주는 피해 배율{" "}
+          <b>{snapshot.criticalOutgoingSnapshot.total.toFixed(4)}x</b>
         </span>
         <span>
-          추가 피해 <b>{engineSnapshot.additionalDamageSnapshot.total.toFixed(2)}%</b>
+          추가 피해 <b>{snapshot.additionalDamageSnapshot.total.toFixed(2)}%</b>
         </span>
         <span>
-          공격 속도 <b>{engineSnapshot.attackSpeedPercent.toFixed(2)}%</b>
+          특정 타입 피해{" "}
+          <b>{snapshot.specificTypeDamageSnapshot.total.toFixed(2)}%</b>
         </span>
         <span>
-          이동 속도 <b>{engineSnapshot.moveSpeedPercent.toFixed(2)}%</b>
+          카드 속성 피해{" "}
+          <b>
+            {(
+              (snapshot.cardAttributeDamageSnapshot.totalMultiplier - 1) *
+              100
+            ).toFixed(2)}
+            %
+          </b>
         </span>
         <span>
-          기본 진화형 피해 <b>{(engineSnapshot.evolution * 100).toFixed(2)}%</b>
+          백어택 스킬 자체 피해{" "}
+          <b>
+            {(
+              (snapshot.backAttackDamageSnapshot.skillMultiplier - 1) *
+              100
+            ).toFixed(2)}
+            %
+          </b>
+        </span>
+        <span>
+          백어택 성공 피해 배율{" "}
+          <b>
+            {snapshot.backAttackDamageSnapshot.successMultiplier.toFixed(4)}x
+          </b>
+        </span>
+        <span>
+          각인 배율{" "}
+          <b>
+            {snapshot.engravingOutgoingDamageSnapshot.totalMultiplier.toFixed(
+              4,
+            )}
+            x
+          </b>
+        </span>
+        <span>
+          돌격대장 피해{" "}
+          <b>{snapshot.enemyDamageSnapshot.commanderDamage.toFixed(2)}%</b>
+        </span>
+        <span>
+          악세·팔찌 배율{" "}
+          <b>
+            {snapshot.enemyDamageSnapshot.accessoriesBraceletMultiplier.toFixed(
+              4,
+            )}
+            x
+          </b>
+        </span>
+        <span>
+          아크 그리드 배율{" "}
+          <b>{snapshot.enemyDamageSnapshot.arkGridMultiplier.toFixed(4)}x</b>
+        </span>
+        <span>
+          깨달음 배율{" "}
+          <b>
+            {snapshot.enemyDamageSnapshot.enlightenmentMultiplier.toFixed(4)}x
+          </b>
+        </span>
+        <span>
+          집중 스킬 타입 배율{" "}
+          <b>{snapshot.focusSkillDamageMultiplier.toFixed(4)}x</b>
+        </span>
+        <span>
+          난무 스킬 타입 배율{" "}
+          <b>{snapshot.flurrySkillDamageMultiplier.toFixed(4)}x</b>
+        </span>
+        <span>
+          마나 스킬 각인 배율{" "}
+          <b>
+            {snapshot.conditionalSkillDamageSnapshot.manaSkill.totalMultiplier.toFixed(
+              4,
+            )}
+            x
+          </b>
+        </span>
+        <span>
+          홀딩·캐스팅 각인 배율{" "}
+          <b>
+            {snapshot.conditionalSkillDamageSnapshot.holdingCastingSkill.totalMultiplier.toFixed(
+              4,
+            )}
+            x
+          </b>
+        </span>
+        <span>
+          공격 속도 <b>{snapshot.attackSpeedPercent.toFixed(2)}%</b>
+        </span>
+        <span>
+          이동 속도 <b>{snapshot.moveSpeedPercent.toFixed(2)}%</b>
+        </span>
+        <span>
+          기본 진화형 피해 <b>{(snapshot.evolution * 100).toFixed(2)}%</b>
         </span>
       </div>
+      <div className="internal-cycle-damage-debug">
+        <strong>전투 사이클 스킬 대미지</strong>
+        {cycleDamageRows.length ? (
+          <div className="internal-cycle-damage-debug-table">
+            <span>스킬</span>
+            <span>사용 횟수</span>
+            <span>대미지 합계</span>
+            <span>1회 평균 대미지</span>
+            {cycleDamageRows.map((row) => (
+              <Fragment key={row.skillName}>
+                <span>{row.skillName}</span>
+                <b>{row.count}</b>
+                <b>{Math.floor(row.totalDamage).toLocaleString()}</b>
+                <b>{Math.floor(row.averageDamage).toLocaleString()}</b>
+              </Fragment>
+            ))}
+          </div>
+        ) : (
+          <small>전투 사이클이 구성되지 않았습니다.</small>
+        )}
+      </div>
       <div className="internal-gear-debug-rows">
-        {snapshot.rows.map((row) => (
+        {snapshot.internalGearSnapshot.rows.map((row) => (
           <div
             className={row.status === "resolved" ? "" : "unresolved"}
             key={row.slot}
@@ -2902,7 +2972,7 @@ export default function Home() {
   const [azenaBuff, setAzenaBuff] = useState(false);
   const [vulnerableAttribute, setVulnerableAttribute] = useState(false);
   const [menu, setMenu] = useState<MainMenu>("simulation");
-  const [tab, setTab] = useState<SimulationTab>("전체");
+  const [tab, setTab] = useState<SimulationTab>("기본 장비");
   const [apiKey, setApiKey] = useState("");
   const [rememberApiKey, setRememberApiKey] = useState(false);
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
@@ -2912,8 +2982,23 @@ export default function Home() {
     "API 설정에서 API 키를 입력한 뒤 캐릭터를 조회하세요.",
   );
   const [searching, setSearching] = useState(false);
-  const [cycle, setCycle] = useState<string[]>([]);
+  const [cycle, setCycle] = useState<CycleEntry[]>([]);
   const [cycleSkill, setCycleSkill] = useState("");
+  const [cyclePresetId, setCyclePresetId] = useState("");
+  const automaticCycleKeyRef = useRef<string | null>(null);
+  const manualCycleEditRef = useRef(false);
+  const [cycleSkillRatioSettings, setCycleSkillRatioSettings] =
+    useState<CycleSkillRatioSettings>({});
+  const [allCycleBackAttack, setAllCycleBackAttack] = useState(true);
+  const [allCycleCooldown, setAllCycleCooldown] = useState(true);
+  const [allCycleBackAttackRate, setAllCycleBackAttackRate] = useState("90");
+  const [allCycleCooldownRate, setAllCycleCooldownRate] = useState("80");
+  const [cycleDurationMode, setCycleDurationMode] =
+    useState<CycleDurationMode>("guideline");
+  const [manualCycleSeconds, setManualCycleSeconds] = useState("");
+  const [draggedCycleIndex, setDraggedCycleIndex] = useState<number | null>(
+    null,
+  );
   const [skillToAdd, setSkillToAdd] = useState("");
   const [visibleSkillIds, setVisibleSkillIds] = useState<string[]>([]);
   const [savedSettings, setSavedSettings] = useState<SavedSetting[]>([]);
@@ -2922,10 +3007,33 @@ export default function Home() {
   const [stoneEffects, setStoneEffects] = useState<StoneEffect[]>([]);
   const [avatarGrades, setAvatarGrades] = useState<Record<string, string>>({});
   const sharedCombatSnapshot = useMemo(
-    () => character
-      ? buildSkillSnapshotValues(character, avatarGrades, stoneEffects, gems, supportRageBuff, banquetBuff, blessingFood, wineFood, azenaBuff, vulnerableAttribute)
-      : null,
-    [character, avatarGrades, stoneEffects, gems, supportRageBuff, banquetBuff, blessingFood, wineFood, azenaBuff, vulnerableAttribute],
+    () =>
+      character
+        ? buildUnifiedCombatSnapshot(
+            character,
+            avatarGrades,
+            stoneEffects,
+            gems,
+            supportRageBuff,
+            banquetBuff,
+            blessingFood,
+            wineFood,
+            azenaBuff,
+            vulnerableAttribute,
+          )
+        : null,
+    [
+      character,
+      avatarGrades,
+      stoneEffects,
+      gems,
+      supportRageBuff,
+      banquetBuff,
+      blessingFood,
+      wineFood,
+      azenaBuff,
+      vulnerableAttribute,
+    ],
   );
   function applyProfile(profile: CharacterProfile) {
     const cleanProfile = {
@@ -2959,7 +3067,10 @@ export default function Home() {
     );
     setCharacter(cleanProfile);
     setCharacterName(cleanProfile.name);
+    automaticCycleKeyRef.current = null;
+    manualCycleEditRef.current = false;
     setGems(cleanProfile.gems);
+    setCycleSkillRatioSettings({});
     setVisibleSkillIds(
       cleanProfile.skills
         .filter(
@@ -3012,13 +3123,62 @@ export default function Home() {
   const bracelet =
     character?.equipment.find((item) => item.slot === "팔찌") ?? null;
   const primaryStat = primaryStatFromEquipment(gear);
-  const cycleSkills = useMemo(
-    () => character?.skills.filter((skill) => skill.level > 0) ?? [],
-    [character],
-  );
+  const classEngraving = character ? glavierClassEngraving(character) : null;
+  const arkGridShorthand = character
+    ? deriveGridShorthand(character.arkGrid.cores, classEngraving)
+    : null;
   const visibleSkills =
     character?.skills.filter((skill) => visibleSkillIds.includes(skill.id)) ??
     [];
+  // 사이클 선택지는 현재 스킬 영역에 실제로 노출된 스킬과 완전히 같은 목록을 쓴다.
+  // 따라서 사용자가 특정 스킬을 추가하면 별도 목록 갱신 없이 즉시 사이클 선택지에도 나타난다.
+  const cycleSkills = visibleSkills;
+  const cycleSkillCards = cycle.reduce<SkillProfile[]>((skills, entry) => {
+    const skill = visibleSkills.find(
+      (candidate) => candidate.name === entry.skillName,
+    );
+    if (skill && !skills.some((item) => item.name === skill.name)) {
+      skills.push(skill);
+    }
+    return skills;
+  }, []);
+  const commonCooldownReductionPercent =
+    character && sharedCombatSnapshot
+      ? commonCooldownReductionRate({
+          swiftness:
+            sharedCombatSnapshot.combatAttributes["신속"].internalTotal,
+          evolution: character.arkPassive.evolution,
+          bracelet: character.equipment.find((item) => item.slot === "팔찌"),
+        }) * 100
+      : 0;
+  const cyclePresets = createCyclePresets(
+    classEngraving,
+    arkGridShorthand,
+    character?.arkPassive.evolution.some(
+      (effect) => effect.name === "뭉툭한 가시" && (effect.level ?? 0) > 0,
+    ) ?? false,
+    character?.arkPassive.evolution.some(
+      (effect) => effect.name === "마나 용광로" && (effect.level ?? 0) > 0,
+    ) ?? false,
+  );
+  const automaticCyclePreset = cyclePresets[0] ?? null;
+  const automaticCycleKey = character
+    ? [
+        character.name,
+        classEngraving ?? "",
+        arkGridShorthand ?? "",
+        automaticCyclePreset?.id ?? "",
+      ].join("|")
+    : null;
+  const selectedCyclePreset = cyclePresets.find(
+    (preset) => preset.id === cyclePresetId,
+  );
+  const azureDragonCycleIcon =
+    visibleSkills.find((skill) => skill.name === "청룡진")?.icon ?? null;
+  const yeongaSimGongCycleIcon =
+    character?.arkPassive.enlightenment.find(
+      (effect) => effect.name === "연가심공",
+    )?.icon ?? null;
   const addableSkills =
     character?.skills.filter((skill) => !visibleSkillIds.includes(skill.id)) ??
     [];
@@ -3031,6 +3191,12 @@ export default function Home() {
     const evolutionRank =
       character.arkPassive.points.find((point) => point.name === "진화")
         ?.rank ?? null;
+    const evolutionLevel = (name: string) =>
+      character.arkPassive.evolution.find((effect) => effect.name === name)
+        ?.level ?? 0;
+    const braceletCooldownIncrease = braceletCooldownIncreaseRate(
+      character.equipment.find((item) => item.slot === "팔찌"),
+    );
     const skills = Object.fromEntries(
       visibleSkills.flatMap((skill) => {
         if (!GLAVIER_SKILL_BY_NAME[skill.name]) return [];
@@ -3065,13 +3231,37 @@ export default function Home() {
               sharedCombatSnapshot.criticalDamageMultiplier,
             criticalOutgoingMultiplier:
               sharedCombatSnapshot.criticalOutgoingMultiplier,
-            outgoingDamageMultiplier:
-              sharedCombatSnapshot.outgoingDamageMultiplier,
-            backAttackDamageMultiplier:
-              sharedCombatSnapshot.backAttackDamageSnapshot.totalMultiplier,
+            additionalDamageMultiplier:
+              1 + sharedCombatSnapshot.additionalDamageSnapshot.total / 100,
+            specificTypeDamageMultiplier:
+              1 + sharedCombatSnapshot.specificTypeDamageSnapshot.total / 100,
+            cardAttributeDamageMultiplier:
+              sharedCombatSnapshot.cardAttributeDamageSnapshot.totalMultiplier,
+            commonEnemyDamageMultiplier:
+              sharedCombatSnapshot.enemyDamageSnapshot.totalMultiplier,
+            backAttackSkillDamageMultiplier:
+              sharedCombatSnapshot.backAttackDamageSnapshot.skillMultiplier,
+            backAttackSuccessDamageMultiplier:
+              sharedCombatSnapshot.backAttackDamageSnapshot.successMultiplier,
+            focusSkillDamageMultiplier:
+              sharedCombatSnapshot.focusSkillDamageMultiplier,
+            flurrySkillDamageMultiplier:
+              sharedCombatSnapshot.flurrySkillDamageMultiplier,
+            manaSkillDamageMultiplier:
+              sharedCombatSnapshot.conditionalSkillDamageSnapshot.manaSkill
+                .totalMultiplier,
+            holdingCastingSkillDamageMultiplier:
+              sharedCombatSnapshot.conditionalSkillDamageSnapshot
+                .holdingCastingSkill.totalMultiplier,
+            superChargeSkillDamageMultiplier:
+              sharedCombatSnapshot.conditionalSkillDamageSnapshot
+                .superChargeSkill.totalMultiplier,
+            arkGridOrderSkillEffects:
+              sharedCombatSnapshot.arkGridOrderSkillEffects,
           },
           evolutionContext: {
             evolution: character.arkPassive.evolution,
+            enlightenment: character.arkPassive.enlightenment,
             evolutionRank,
             attackSpeedPercent: sharedCombatSnapshot.attackSpeedPercent,
             moveSpeedPercent: sharedCombatSnapshot.moveSpeedPercent,
@@ -3089,19 +3279,46 @@ export default function Home() {
           skillName: skill.name,
           selectedTripodNames,
         });
-        const awakeningCooldownReduction = (skill.name === "맹룡난무" || skill.name === "적룡필살")
-          ? (character.arkPassive.leap.find((effect) => effect.name === "잠재력 해방")?.level ?? 0) * 0.02
+        const catalogSkill = getGlavierSkill(skill.name);
+        const manaCooldownReduction = catalogSkill?.tags.mana
+          ? (evolutionLevel("끝없는 마나") +
+              evolutionLevel("무한한 마력")) *
+            0.07
           : 0;
+        const awakeningCooldownReduction =
+          skill.name === "맹룡난무" || skill.name === "적룡필살"
+            ? (character.arkPassive.leap.find(
+                (effect) => effect.name === "잠재력 해방",
+              )?.level ?? 0) * 0.02
+            : 0;
         const cooldown = baseCooldown
-          ? { ...baseCooldown, cooldownSeconds: baseCooldown.cooldownSeconds * (1 - awakeningCooldownReduction) }
+          ? {
+              ...baseCooldown,
+              cooldownSeconds: applyCooldownReductionRates(
+                baseCooldown.cooldownSeconds +
+                  calculation.arkGridOrder.cooldownFlatSeconds,
+                [
+                  cooldownGemReductionRate(skillGems),
+                  sharedCombatSnapshot.combatAttributes["신속"].internalTotal *
+                    0.000215,
+                  manaCooldownReduction,
+                  evolutionLevel("최적화 훈련") * 0.04,
+                  evolutionLevel("타이밍 지배") * 0.05,
+                  awakeningCooldownReduction,
+                  -braceletCooldownIncrease,
+                ],
+              ),
+            }
           : baseCooldown;
-        return [[
-          skill.id,
-          {
-            calculation,
-            cooldown,
-          },
-        ]];
+        return [
+          [
+            skill.id,
+            {
+              calculation,
+              cooldown,
+            },
+          ],
+        ];
       }),
     ) as Record<
       string,
@@ -3111,13 +3328,186 @@ export default function Home() {
       }
     >;
     return { snapshot: sharedCombatSnapshot, skills };
+  }, [character, gems, sharedCombatSnapshot, supportRageBuff, visibleSkills]);
+  useEffect(() => {
+    if (!character || !unifiedSimulation) return;
+    const preset = cyclePresets[0] ?? null;
+    if (automaticCycleKeyRef.current === automaticCycleKey) {
+      return;
+    } else {
+      manualCycleEditRef.current = false;
+    }
+    automaticCycleKeyRef.current = automaticCycleKey;
+    if (!preset) {
+      setCyclePresetId("");
+      setCycle([]);
+      return;
+    }
+    const available = new Map(
+      character.skills.map((skill) => [skill.name, skill.id]),
+    );
+    setVisibleSkillIds((current) => [
+      ...current,
+      ...preset.entries
+        .map((entry) => available.get(entry.skillName))
+        .filter(
+          (skillId): skillId is string =>
+            skillId !== undefined && !current.includes(skillId),
+        ),
+    ]);
+    setCyclePresetId(preset.id);
+    setCycle(
+      preset.entries
+        .filter((entry) => available.has(entry.skillName))
+        .map((entry) => ({ ...entry, id: crypto.randomUUID() })),
+    );
   }, [
+    automaticCycleKey,
     character,
-    gems,
-    sharedCombatSnapshot,
-    supportRageBuff,
-    visibleSkills,
   ]);
+  const guidelineCycleSeconds = (() => {
+    if (!selectedCyclePreset || !unifiedSimulation) return null;
+    const targetSkillName =
+      selectedCyclePreset.id === "jeoljeong-222" ? "적룡필살" : "적룡포";
+    const targetCooldown = Object.values(unifiedSimulation.skills).find(
+      (entry) => entry.calculation.skill.name === targetSkillName,
+    )?.cooldown?.cooldownSeconds;
+    if (targetCooldown === undefined) return null;
+    return selectedCyclePreset.id === "jeoljeong-222"
+      ? targetCooldown
+      : targetCooldown * 3;
+  })();
+  const selectedCycleSeconds =
+    cycleDurationMode === "guideline"
+      ? guidelineCycleSeconds
+      : Number(manualCycleSeconds);
+  const cycleSeconds =
+    typeof selectedCycleSeconds === "number" &&
+    Number.isFinite(selectedCycleSeconds)
+      ? selectedCycleSeconds
+      : 0;
+  const cycleDamageRows = (() => {
+    if (!unifiedSimulation || cycle.length === 0) return [];
+    const rows = new Map<
+      string,
+      { skillName: string; count: number; totalDamage: number }
+    >();
+    cycle.forEach((entry) => {
+      const skill = visibleSkills.find(
+        (candidate) => candidate.name === entry.skillName,
+      );
+      if (!skill) return;
+      const simulationSkill = unifiedSimulation.skills[skill.id];
+      if (!simulationSkill) return;
+      const ratios = cycleSkillRatioSettings[skill.name] ?? {
+        backAttackRate: "0",
+        cooldownRate: "0",
+      };
+      const backAttackRate = allCycleBackAttack
+        ? Math.min(100, Math.max(0, Number(allCycleBackAttackRate) || 0))
+        : Math.min(100, Math.max(0, Number(ratios.backAttackRate) || 0));
+      const cooldownRate = allCycleCooldown
+        ? Math.min(100, Math.max(0, Number(allCycleCooldownRate) || 0))
+        : Math.min(100, Math.max(0, Number(ratios.cooldownRate) || 0));
+      const scenarioFor = (backAttack: boolean) =>
+        simulationSkill.calculation.scenarios.find(
+          (scenario) =>
+            scenario.conditions.azureDragonBuff === entry.azureDragon &&
+            scenario.conditions.yeongaSimGong === entry.yeongaSimGong &&
+            scenario.conditions.backAttack === backAttack,
+        );
+      const nonBackAttackScenario = scenarioFor(false);
+      const backAttackScenario = scenarioFor(true) ?? nonBackAttackScenario;
+      if (!nonBackAttackScenario || !backAttackScenario) return;
+      const successWeight = backAttackRate / 100;
+      const expectedSkillDamage =
+        nonBackAttackScenario.averageDamage * (1 - successWeight) +
+        backAttackScenario.averageDamage * successWeight;
+      const current = rows.get(skill.name) ?? {
+        skillName: skill.name,
+        count: 0,
+        totalDamage: 0,
+      };
+      current.count += 1;
+      current.totalDamage += expectedSkillDamage * (cooldownRate / 100);
+      rows.set(skill.name, current);
+    });
+    return [...rows.values()].map((row) => ({
+      ...row,
+      averageDamage: row.totalDamage / row.count,
+    }));
+  })();
+  const expectedDps =
+    cycleSeconds > 0 && cycleDamageRows.length > 0
+      ? cycleDamageRows.reduce((total, row) => total + row.totalDamage, 0) /
+        cycleSeconds
+      : null;
+  function exportDebugJson() {
+    if (!character || !sharedCombatSnapshot) return;
+    const exportPayload = {
+      exportedAt: new Date().toISOString(),
+      character: {
+        name: character.name,
+        server: character.server,
+        className: character.className,
+        buildName: character.buildName,
+        level: character.level,
+        apiCombatPower: character.apiCombatPower,
+        equipment: character.equipment,
+        engravings: character.engravingDetails,
+        avatars: character.avatars,
+        gems,
+        arkPassive: character.arkPassive,
+        arkGrid: character.arkGrid,
+      },
+      uiSettings: {
+        supportRageBuff,
+        banquetBuff,
+        blessingFood,
+        wineFood,
+        azenaBuff,
+        vulnerableAttribute,
+        stoneEffects,
+        avatarGrades,
+        cyclePresetId,
+        cycleDurationMode,
+        manualCycleSeconds,
+        cycle,
+        cycleSkillRatioSettings,
+        allCycleBackAttack,
+        allCycleCooldown,
+        allCycleBackAttackRate,
+        allCycleCooldownRate,
+      },
+      formulas: {
+        expectedDps:
+          "sum(스킬별 사이클 대미지 합계) / 선택 사이클 시간",
+        skillCycleDamage:
+          "스킬 시나리오 평균 대미지 × 백어택 비율 × 쿨타임 비율",
+        skillDamage:
+          "(최종 공격력 × 모션 배율 + 모션 상수) × 트라이포드 배율 × 보석 배율 × 진화형 피해 × 공통 배율",
+      },
+      calculation: {
+        expectedDps,
+        cycleSeconds,
+        guidelineCycleSeconds,
+        selectedCycleSeconds,
+        cycleDamageRows,
+        combatSnapshot: sharedCombatSnapshot,
+        unifiedSimulation,
+      },
+    };
+    const json = JSON.stringify(exportPayload, null, 2);
+    const blob = new Blob([json], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `${character.name}-dps-debug-${new Date()
+      .toISOString()
+      .replaceAll(":", "-")}.json`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
   const engravingNames = ENGRAVING_NAMES;
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3160,6 +3550,34 @@ export default function Home() {
     } catch {
       setMessage("브라우저 저장소에 API 키를 저장하지 못했습니다.");
     }
+  }
+  function updateCycleSkillRatio(
+    skillName: string,
+    key: "backAttackRate" | "cooldownRate",
+    value: string,
+  ) {
+    if (value === "") {
+      setCycleSkillRatioSettings((current) => ({
+        ...current,
+        [skillName]: {
+          backAttackRate: current[skillName]?.backAttackRate ?? "0",
+          cooldownRate: current[skillName]?.cooldownRate ?? "0",
+          [key]: "",
+        },
+      }));
+      return;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) return;
+    const clampedValue = Math.min(100, Math.max(0, numericValue));
+    setCycleSkillRatioSettings((current) => ({
+      ...current,
+      [skillName]: {
+        backAttackRate: current[skillName]?.backAttackRate ?? "0",
+        cooldownRate: current[skillName]?.cooldownRate ?? "0",
+        [key]: String(clampedValue),
+      },
+    }));
   }
   function toggleApiKeyRemember(checked: boolean) {
     if (checked && !apiKey.trim()) {
@@ -3253,8 +3671,14 @@ export default function Home() {
 
       // T2~T5는 전체 evolution 배열의 위치가 화면 행 순서와 다르므로
       // 기존 항목 수정은 안정적인 effect id로 찾는다.
-      if (group === "evolution" && patch.id && !patch.id.startsWith("evolution-t1-editor-")) {
-        const identifiedIndex = effects.findIndex((effect) => effect.id === patch.id);
+      if (
+        group === "evolution" &&
+        patch.id &&
+        !patch.id.startsWith("evolution-t1-editor-")
+      ) {
+        const identifiedIndex = effects.findIndex(
+          (effect) => effect.id === patch.id,
+        );
         if (identifiedIndex >= 0) targetIndex = identifiedIndex;
       }
 
@@ -3314,13 +3738,13 @@ export default function Home() {
         arkGrid: {
           ...current.arkGrid,
           cores,
-          shorthand: deriveGridShorthand(cores),
+          shorthand: deriveGridShorthand(cores, glavierClassEngraving(current)),
         },
       };
     });
   }
   function addGem(
-    skillName = cycleSkills[0]?.name ?? "",
+    skillName = visibleSkills[0]?.name ?? "",
     type: "겁화" | "작열" = "겁화",
   ) {
     if (gems.length >= 11) {
@@ -3381,9 +3805,11 @@ export default function Home() {
         {
           id: crypto.randomUUID(),
           name: `${character.name} 세팅 ${value.length + 1}`,
-          cycle,
+          cycle: cycle.map((entry) => entry.skillName),
           itemLevel: character.level,
-          attackPower: sharedCombatSnapshot?.finalAttackPowerSnapshot.total.toFixed(2) ?? "0",
+          attackPower:
+            sharedCombatSnapshot?.finalAttackPowerSnapshot.total.toFixed(2) ??
+            "0",
           savedAt: new Date().toLocaleString("ko-KR"),
         },
       ];
@@ -3533,20 +3959,84 @@ export default function Home() {
             <section className="workspace simulation-workspace">
               <div className="profile-strip">
                 <Artwork icon={character.characterImage} label="⚔" />
-                <div>
+                <div className="profile-identity">
                   <span>
                     {character.server} · {character.className}
                   </span>
                   <h1>{character.name}</h1>
                 </div>
-                <div className="profile-dps">
-                  <span>예상 DPS</span>
-                  <strong>계산 준비 중</strong>
+                <div
+                  className="profile-combat-summary"
+                  aria-label="현재 계산 스냅샷 요약"
+                >
+                  <div className="profile-build">
+                    <span>직업 · 코어</span>
+                    <strong>
+                      {classEngraving ?? character.className}
+                      {arkGridShorthand ? ` ${arkGridShorthand}` : " · 미구성"}
+                    </strong>
+                  </div>
+                  <div className="profile-dps">
+                    <span>예상 DPS</span>
+                    <strong>
+                      {expectedDps === null
+                        ? "계산 준비 중"
+                        : Math.floor(expectedDps).toLocaleString()}
+                    </strong>
+                  </div>
+                  <div className="profile-attributes">
+                    {(["특화", "신속", "치명", "제압"] as const).map(
+                      (name) => (
+                        <span key={name}>
+                          {name}{" "}
+                          <b>
+                            {sharedCombatSnapshot!.combatAttributes[
+                              name
+                            ].internalTotal.toLocaleString()}
+                          </b>
+                        </span>
+                      ),
+                    )}
+                  </div>
+                  <div>
+                    <span>최종 공격력</span>
+                    <strong>
+                      {Math.floor(
+                        sharedCombatSnapshot!.finalAttackPower,
+                      ).toLocaleString()}
+                    </strong>
+                  </div>
+                  <div>
+                    <span>기본 치적</span>
+                    <strong>
+                      {ceilPercentToTwoDecimals(
+                        sharedCombatSnapshot!.criticalRateSnapshot.total * 100
+                      ).toFixed(2)}
+                      %
+                    </strong>
+                  </div>
+                  <div>
+                    <span>공속 / 이속</span>
+                    <strong>
+                      {sharedCombatSnapshot!.attackSpeedPercent.toFixed(2)}% /{" "}
+                      {sharedCombatSnapshot!.moveSpeedPercent.toFixed(2)}%
+                    </strong>
+                  </div>
+                  <div>
+                    <span>쿨타임 감소</span>
+                    <strong>{commonCooldownReductionPercent.toFixed(2)}%</strong>
+                  </div>
+                  <div className="profile-api-combat-power">
+                    <span>전투력 · API</span>
+                    <strong>{formatApiCombatPower(character.apiCombatPower)}</strong>
+                  </div>
                 </div>
-                <strong>아이템 레벨 {character.level}</strong>
-                <button type="button" onClick={saveSetting}>
-                  현재 세팅 저장
-                </button>
+                <div className="profile-actions">
+                  <strong>아이템 레벨 {character.level}</strong>
+                  <button type="button" onClick={saveSetting}>
+                    현재 세팅 저장
+                  </button>
+                </div>
               </div>
               <aside className="floating-doping-panel">
                 <strong>도핑</strong>
@@ -3558,16 +4048,212 @@ export default function Home() {
                       setSupportRageBuff(event.target.checked)
                     }
                   />{" "}
-                  정열 버프 (+14%)
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="공이속 9% · 진화형 피해 14%"
+                  >
+                    <Artwork
+                      icon="https://cdn-lostark.game.onstove.com/efui_iconatlas/ark_passive_evolution/ark_passive_evolution_33.png"
+                      label="정"
+                    />
+                  </span>
                 </label>
-                <label><input type="checkbox" checked={banquetBuff} onChange={(event) => setBanquetBuff(event.target.checked)} /> 만찬 (+무공 1600, 공이속 5%)</label>
-                <label><input type="checkbox" checked={blessingFood} onChange={(event) => setBlessingFood(event.target.checked)} /> 축복 (+공속 3%)</label>
-                <label><input type="checkbox" checked={wineFood} onChange={(event) => setWineFood(event.target.checked)} /> 와인 (+이속 3%)</label>
-                <label><input type="checkbox" checked={azenaBuff} onChange={(event) => setAzenaBuff(event.target.checked)} /> 아제나 (+힘/민/지 6000)</label>
-                <label><input type="checkbox" checked={vulnerableAttribute} onChange={(event) => setVulnerableAttribute(event.target.checked)} /> 취약 속성 (+카드 속성 피해 10%)</label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={banquetBuff}
+                    onChange={(event) => setBanquetBuff(event.target.checked)}
+                  />{" "}
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="공이속 5% · 무기 공격력 +1600"
+                  >
+                    <Artwork icon={pcBuffIcon.src} label="만" />
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={blessingFood}
+                    onChange={(event) => setBlessingFood(event.target.checked)}
+                  />{" "}
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="공속 3%"
+                  >
+                    <Artwork icon={blessingBuffIcon.src} label="축" />
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={wineFood}
+                    onChange={(event) => setWineFood(event.target.checked)}
+                  />{" "}
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="이속 3%"
+                  >
+                    <Artwork icon={wineBuffIcon.src} label="와" />
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={azenaBuff}
+                    onChange={(event) => setAzenaBuff(event.target.checked)}
+                  />{" "}
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="힘/민/지 +6000"
+                  >
+                    <Artwork icon={azenaBuffIcon.src} label="아" />
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={vulnerableAttribute}
+                    onChange={(event) =>
+                      setVulnerableAttribute(event.target.checked)
+                    }
+                  />{" "}
+                  <span
+                    className="doping-buff-icon"
+                    data-tooltip="피해 10% 증가"
+                  >
+                    <Artwork icon={vulnerableAttributeBuffIcon.src} label="취" />
+                  </span>
+                </label>
+              </aside>
+              <aside className="floating-cycle-ratio-panel">
+                <strong>전투 사이클 스킬</strong>
+                <div className="cycle-ratio-global-options">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={allCycleBackAttack}
+                      onChange={(event) =>
+                        setAllCycleBackAttack(event.target.checked)
+                      }
+                    />
+                    <span className="cycle-global-label">
+                      백어택 전체
+                    </span>
+                    <input
+                      aria-label="전체 백어택 비율"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={allCycleBackAttackRate}
+                      onChange={(event) =>
+                        setAllCycleBackAttackRate(event.target.value)
+                      }
+                    />
+                    <span className="cycle-global-percent">%</span>
+                  </label>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={allCycleCooldown}
+                      onChange={(event) =>
+                        setAllCycleCooldown(event.target.checked)
+                      }
+                    />
+                    <span className="cycle-global-label">
+                      쿨타임 전체
+                    </span>
+                    <input
+                      aria-label="전체 쿨타임 비율"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={allCycleCooldownRate}
+                      onChange={(event) =>
+                        setAllCycleCooldownRate(event.target.value)
+                      }
+                    />
+                    <span className="cycle-global-percent">%</span>
+                  </label>
+                </div>
+                <div className="cycle-ratio-header">
+                  <span>스킬</span>
+                  <span>백어택 비율</span>
+                  <span>쿨타임 비율</span>
+                </div>
+                {cycleSkillCards.length ? (
+                  <div className="cycle-ratio-list">
+                    {cycleSkillCards.map((skill) => {
+                      const ratios = cycleSkillRatioSettings[skill.name] ?? {
+                        backAttackRate: "0",
+                        cooldownRate: "0",
+                      };
+                      return (
+                        <div className="cycle-ratio-row" key={skill.id}>
+                          <div className="cycle-ratio-skill">
+                            <Artwork
+                              icon={skill.icon}
+                              label={skill.name.slice(0, 1)}
+                              title={skill.name}
+                            />
+                            <span>{skill.name}</span>
+                          </div>
+                          <input
+                            aria-label={`${skill.name} 백어택 비율`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={
+                              allCycleBackAttack
+                                ? allCycleBackAttackRate
+                                : ratios.backAttackRate
+                            }
+                            disabled={allCycleBackAttack}
+                            onChange={(event) =>
+                              updateCycleSkillRatio(
+                                skill.name,
+                                "backAttackRate",
+                                event.target.value,
+                              )
+                            }
+                          />
+                          <input
+                            aria-label={`${skill.name} 쿨타임 비율`}
+                            type="number"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={
+                              allCycleCooldown
+                                ? allCycleCooldownRate
+                                : ratios.cooldownRate
+                            }
+                            disabled={allCycleCooldown}
+                            onChange={(event) =>
+                              updateCycleSkillRatio(
+                                skill.name,
+                                "cooldownRate",
+                                event.target.value,
+                              )
+                            }
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="cycle-ratio-empty">
+                    전투 사이클에 스킬을 추가해주세요.
+                  </span>
+                )}
               </aside>
               <InternalGearSnapshotDebug
                 snapshot={sharedCombatSnapshot!}
+                cycleDamageRows={cycleDamageRows}
+                onExportJson={exportDebugJson}
               />
               <nav className="sim-tabs" aria-label="시뮬레이션 탭">
                 {simTabs.map((item) => (
@@ -3582,24 +4268,6 @@ export default function Home() {
                 ))}
               </nav>
               <div className="sim-content">
-                {tab === "전체" ? (
-                  <div className="summary-board">
-                    {[
-                      ["직업", deriveBuildName(character)],
-                      ["아이템 레벨", character.level],
-                      ["공격 속도", `${sharedCombatSnapshot?.attackSpeedPercent.toFixed(2) ?? "0.00"}%`],
-                      ["이동 속도", `${sharedCombatSnapshot?.moveSpeedPercent.toFixed(2) ?? "0.00"}%`],
-                      ["치명타 적중률", `${((sharedCombatSnapshot?.criticalRateSnapshot.total ?? 0) * 100).toFixed(2)}%`],
-                      ["예상 DPS", "계산 준비 중"],
-                      ["예상 1사이클 딜량", "계산 준비 중"],
-                    ].map(([label, value]) => (
-                      <article key={label}>
-                        <span>{label}</span>
-                        <strong>{value}</strong>
-                      </article>
-                    ))}
-                  </div>
-                ) : null}
                 {tab === "기본 장비" ? (
                   <div className="equipment-left-stack">
                     <div className="equipment-layout">
@@ -3787,8 +4455,8 @@ export default function Home() {
                               .trim();
                             const options = [
                               ...new Set([
-                                normalizedName,
                                 ...(gridCoreOptions[index] ?? []),
+                                normalizedName,
                               ]),
                             ].filter((option) => option !== "없음");
                             return (
@@ -3949,90 +4617,294 @@ export default function Home() {
                     <section className="cycle-builder">
                       <div className="section-heading">
                         <div>
-                          <h2>전투 사이클 구성</h2>
+                          <h2>전투 사이클 구성 ({cycle.length}개)</h2>
                           <p>
                             스킬을 추가한 뒤 위·아래로 이동해 사용 순서를
                             만드세요.
                           </p>
                         </div>
-                        <span>{cycle.length}개</span>
                       </div>
                       <div className="cycle-add">
-                        <select
-                          value={cycleSkill}
-                          onChange={(event) =>
-                            setCycleSkill(event.target.value)
-                          }
-                        >
-                          <option value="">스킬 선택</option>
-                          {cycleSkills.map((skill) => (
-                            <option value={skill.name} key={skill.id}>
-                              {skill.name}
-                            </option>
-                          ))}
-                        </select>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            cycleSkill &&
-                            setCycle((value) => [...value, cycleSkill])
-                          }
-                        >
-                          추가
-                        </button>
+                        <div className="cycle-selection-controls">
+                          <select
+                            aria-label="기본 사이클 선택"
+                            value={cyclePresetId}
+                            onChange={(event) => {
+                              manualCycleEditRef.current = true;
+                              const preset = cyclePresets.find(
+                                (candidate) => candidate.id === event.target.value,
+                              );
+                              setCyclePresetId(event.target.value);
+                              if (!preset) return;
+                              const available = new Map(
+                                character?.skills.map((skill) => [
+                                  skill.name,
+                                  skill.id,
+                                ]),
+                              );
+                              setVisibleSkillIds((current) => [
+                                ...current,
+                                ...preset.entries
+                                  .map((entry) => available.get(entry.skillName))
+                                  .filter(
+                                    (skillId): skillId is string =>
+                                      skillId !== undefined &&
+                                      !current.includes(skillId),
+                                  ),
+                              ]);
+                              setCycle(
+                                preset.entries
+                                  .filter((entry) =>
+                                    available.has(entry.skillName),
+                                  )
+                                  .map((entry) => ({
+                                    ...entry,
+                                    id: crypto.randomUUID(),
+                                  })),
+                              );
+                            }}
+                          >
+                            <option value="">기본 사이클 불러오기</option>
+                            {cyclePresets.map((preset) => (
+                              <option value={preset.id} key={preset.id}>
+                                {preset.label}
+                              </option>
+                            ))}
+                          </select>
+                          <select
+                            value={cycleSkill}
+                            onChange={(event) => {
+                              const selectedSkill = event.target.value;
+                              setCycleSkill("");
+                              if (!selectedSkill) return;
+                              manualCycleEditRef.current = true;
+                              setCycle((value) => [
+                                ...value,
+                                {
+                                  id: crypto.randomUUID(),
+                                  skillName: selectedSkill,
+                                  azureDragon: false,
+                                  yeongaSimGong: false,
+                                },
+                              ]);
+                            }}
+                          >
+                            <option value="">스킬 선택</option>
+                            {cycleSkills.map((skill) => (
+                              <option value={skill.name} key={skill.id}>
+                                {skill.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="cycle-duration-controls">
+                          <label className="cycle-duration-option">
+                            <input
+                              type="checkbox"
+                              checked={cycleDurationMode === "guideline"}
+                              disabled={guidelineCycleSeconds === null}
+                              onChange={() => setCycleDurationMode("guideline")}
+                            />
+                            <span>예상 사이클 시간</span>
+                            <strong>
+                              {guidelineCycleSeconds === null
+                                ? "내부 지침 미등록"
+                                : `${guidelineCycleSeconds.toFixed(2)}초`}
+                            </strong>
+                          </label>
+                          <label className="cycle-duration-option">
+                            <input
+                              type="checkbox"
+                              checked={cycleDurationMode === "manual"}
+                              onChange={() => setCycleDurationMode("manual")}
+                            />
+                            <span>선택 사이클 시간</span>
+                            <input
+                              aria-label="선택 사이클 시간(초)"
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              placeholder="초 입력"
+                              value={manualCycleSeconds}
+                              disabled={cycleDurationMode !== "manual"}
+                              onChange={(event) =>
+                                setManualCycleSeconds(event.target.value)
+                              }
+                            />
+                            <em>초</em>
+                          </label>
+                        </div>
                       </div>
                       {cycle.length ? (
                         <ol className="cycle-list">
-                          {cycle.map((skill, index) => (
-                            <li key={`${skill}-${index}`}>
-                              <b>{index + 1}</b>
-                              <span>{skill}</span>
-                              <button
-                                type="button"
-                                onClick={() =>
+                          {cycle.map((entry, index) => {
+                            const { skillName } = entry;
+                            const skill = visibleSkills.find(
+                              (candidate) => candidate.name === skillName,
+                            );
+
+                            return (
+                              <li
+                                className="cycle-skill-tile"
+                                key={entry.id}
+                                draggable
+                                onDragStart={() =>
+                                  setDraggedCycleIndex(index)
+                                }
+                                onDragOver={(event) => event.preventDefault()}
+                                onDrop={(event) => {
+                                  event.preventDefault();
+                                  if (
+                                    draggedCycleIndex === null ||
+                                    draggedCycleIndex === index
+                                  ) {
+                                    setDraggedCycleIndex(null);
+                                    return;
+                                  }
+                                  manualCycleEditRef.current = true;
                                   setCycle((value) => {
                                     const next = [...value];
-                                    if (index > 0)
-                                      [next[index - 1], next[index]] = [
-                                        next[index],
-                                        next[index - 1],
-                                      ];
+                                    const [moved] = next.splice(
+                                      draggedCycleIndex,
+                                      1,
+                                    );
+                                    next.splice(index, 0, moved);
                                     return next;
-                                  })
-                                }
+                                  });
+                                  setDraggedCycleIndex(null);
+                                }}
+                                onDragEnd={() => setDraggedCycleIndex(null)}
                               >
-                                ↑
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCycle((value) => {
-                                    const next = [...value];
-                                    if (index < next.length - 1)
-                                      [next[index + 1], next[index]] = [
-                                        next[index],
-                                        next[index + 1],
-                                      ];
-                                    return next;
-                                  })
-                                }
-                              >
-                                ↓
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setCycle((value) =>
-                                    value.filter(
-                                      (_, itemIndex) => itemIndex !== index,
-                                    ),
-                                  )
-                                }
-                              >
-                                삭제
-                              </button>
-                            </li>
-                          ))}
+                                <b className="cycle-skill-order">
+                                  {index + 1}
+                                </b>
+                                <Artwork
+                                  icon={skill?.icon ?? null}
+                                  label={skillName.slice(0, 1)}
+                                  title={skillName}
+                                />
+                                <span className="cycle-skill-name">
+                                  {skillName}
+                                </span>
+                                <div className="cycle-skill-buffs">
+                                  <button
+                                    className={
+                                      entry.azureDragon ? "active" : ""
+                                    }
+                                    type="button"
+                                    title="청룡진 적용"
+                                    aria-label={`${skillName} 청룡진 적용`}
+                                    aria-pressed={entry.azureDragon}
+                                    onClick={() =>
+                                      (manualCycleEditRef.current = true,
+                                      setCycle((value) =>
+                                        value.map((candidate) =>
+                                          candidate.id === entry.id
+                                            ? {
+                                                ...candidate,
+                                                azureDragon:
+                                                  !candidate.azureDragon,
+                                              }
+                                            : candidate,
+                                        ),
+                                      ))
+                                    }
+                                  >
+                                    {azureDragonCycleIcon ? (
+                                      <img src={azureDragonCycleIcon} alt="" />
+                                    ) : (
+                                      <span>청</span>
+                                    )}
+                                  </button>
+                                  <button
+                                    className={
+                                      entry.yeongaSimGong ? "active" : ""
+                                    }
+                                    type="button"
+                                    title="연가심공 적용"
+                                    aria-label={`${skillName} 연가심공 적용`}
+                                    aria-pressed={entry.yeongaSimGong}
+                                    onClick={() =>
+                                      (manualCycleEditRef.current = true,
+                                      setCycle((value) =>
+                                        value.map((candidate) =>
+                                          candidate.id === entry.id
+                                            ? {
+                                                ...candidate,
+                                                yeongaSimGong:
+                                                  !candidate.yeongaSimGong,
+                                              }
+                                            : candidate,
+                                        ),
+                                      ))
+                                    }
+                                  >
+                                    {yeongaSimGongCycleIcon ? (
+                                      <img
+                                        src={yeongaSimGongCycleIcon}
+                                        alt=""
+                                      />
+                                    ) : (
+                                      <span>연</span>
+                                    )}
+                                  </button>
+                                </div>
+                                <div className="cycle-skill-actions">
+                                  <button
+                                    type="button"
+                                    aria-label={`${skillName} 한 칸 왼쪽 이동`}
+                                    disabled={index === 0}
+                                    onClick={() =>
+                                      (manualCycleEditRef.current = true,
+                                      setCycle((value) => {
+                                        const next = [...value];
+                                        [next[index - 1], next[index]] = [
+                                          next[index],
+                                          next[index - 1],
+                                        ];
+                                        return next;
+                                      }))
+                                    }
+                                  >
+                                    ←
+                                  </button>
+                                  <button
+                                    type="button"
+                                    aria-label={`${skillName} 한 칸 오른쪽 이동`}
+                                    disabled={index === cycle.length - 1}
+                                    onClick={() =>
+                                      (manualCycleEditRef.current = true,
+                                      setCycle((value) => {
+                                        const next = [...value];
+                                        [next[index], next[index + 1]] = [
+                                          next[index + 1],
+                                          next[index],
+                                        ];
+                                        return next;
+                                      }))
+                                    }
+                                  >
+                                    →
+                                  </button>
+                                </div>
+                                <button
+                                  className="cycle-skill-remove"
+                                  type="button"
+                                  aria-label={`${skillName} 삭제`}
+                                  onClick={() =>
+                                    (manualCycleEditRef.current = true,
+                                    setCycle((value) =>
+                                      value.filter(
+                                        (candidate) => candidate.id !== entry.id,
+                                      ),
+                                    ))
+                                  }
+                                >
+                                  ×
+                                </button>
+                              </li>
+                            );
+                          })}
                         </ol>
                       ) : (
                         <p className="empty-copy">

@@ -4,6 +4,7 @@ export type LostArkProfile = {
   CharacterName?: string;
   CharacterLevel?: number;
   CharacterClassName?: string;
+  CombatPower?: string | number;
   ItemAvgLevel?: string;
   ItemMaxLevel?: string;
   ExpeditionLevel?: number;

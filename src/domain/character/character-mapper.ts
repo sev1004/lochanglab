@@ -23,6 +23,8 @@ export type CharacterProfile = {
   engraving: string;
   level: string;
   characterImage: string | null;
+  /** API가 제공하는 표기 전투력. 내부 시뮬레이션 계산에는 사용하지 않는다. */
+  apiCombatPower: string | number | null;
   stats: [string, string][];
   equipment: EquipmentProfile[];
   engravings: string[];
@@ -83,6 +85,7 @@ export function mapCharacterResponse(data: CharacterApiResponse): CharacterProfi
     engraving: engravingItems[0]?.Name ?? "직업 각인 미상",
     level: profile.ItemAvgLevel ?? profile.ItemMaxLevel ?? "-",
     characterImage: profile.CharacterImage ?? null,
+    apiCombatPower: profile.CombatPower ?? null,
     stats,
     equipment: mapEquipment(data.equipment ?? []),
     engravings: engravingItems.map((item) => item.Name ?? "이름 없음"),

@@ -286,7 +286,8 @@
 .skill-gem-inline > div > select:nth-of-type(2) { grid-column:2; grid-row:2; width:37px; }
 .skill-gem-inline select { width:100%; height:18px; min-width:0; padding:1px 3px; border:1px solid #344154; border-radius:4px; background:#111b28; color:#edf2f7; font-size:8px; }
 .skill-gem-inline button { height:18px; min-width:0; padding:0 3px; border:1px dashed #40506a; border-radius:4px; background:#111b28; color:#80e7bd; font-size:8px; white-space:nowrap; }
-.skill-gem-add-slot { width:100%; }
+.skill-gem-slot,
+.skill-gem-add-slot { width:80%; max-width:80%; justify-self:start; }
 .skill-gem-inline { margin-left:8px; padding-left:8px; border-left:1px solid #2a3b4f; }
 .skill-gem-inline:empty { display:none; }
 .skill-gem-inline > div { position:relative; padding-right:0; }
@@ -300,6 +301,9 @@
 .skill-metrics span { display:flex; justify-content:space-between; gap:4px; white-space:nowrap; }
 .skill-evolution-metrics { padding-left:12px; border-left:1px solid #2a3b4f; }
 .skill-metrics b { color:#d7e2ef; font-weight:600; }
+.skill-metric-tooltip { position:relative; cursor:help; }
+.skill-metric-tooltip::after { position:absolute; left:0; bottom:calc(100% + 5px); z-index:1000; width:max-content; max-width:180px; padding:5px 7px; border:1px solid #3b6b5a; border-radius:4px; background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:8px; line-height:1.35; opacity:0; pointer-events:none; transform:translateY(3px); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
+.skill-metric-tooltip:hover::after,.skill-metric-tooltip:focus-visible::after { opacity:1; transform:translateY(0); visibility:visible; }
 .skill-bulk-controls { display:flex; align-items:center; gap:5px; margin-left:auto; }
 .skill-bulk-controls strong { color:#9aa8ba; font-size:9px; }
 .skill-bulk-controls button { min-width:38px; height:24px; padding:0 5px; border:1px solid #344154; border-radius:3px; background:#172130; color:#d4deea; font-size:9px; }
@@ -323,7 +327,29 @@
   .skills-cycle .skill-editor .skill-gem-inline > div > select:nth-of-type(2) { width:36px; }
 }
 @media (min-width:701px) { .sim-content .skills-cycle { grid-template-columns:1fr; align-items:start; }.skills-cycle .cycle-builder { grid-column:1; grid-row:1; }.skills-cycle .skill-list-section { grid-column:1; grid-row:2; } }
+@media (max-width:700px) { .sim-content .skills-cycle { display:flex; flex-direction:column; }.skills-cycle .cycle-builder { order:-1; }.skills-cycle .skill-list-section { order:0; } }
 @media (max-width:700px) { .skills-cycle .gem-board { padding:13px; }.gem-board-heading { display:grid; gap:10px; }.gem-bulk-controls { justify-content:flex-start; }.gem-board-list { grid-template-columns:repeat(3,46px); max-width:100%; }.gem-remove-button { opacity:1; } }
+
+/* 스킬 탭의 두 편집 영역은 simulation-workspace의 콘텐츠 폭 안에서만 확장한다. */
+.simulation-workspace .sim-content,
+.simulation-workspace .skills-cycle,
+.simulation-workspace .skills-cycle > .skill-list-section,
+.simulation-workspace .skills-cycle > .cycle-builder {
+  box-sizing:border-box;
+  min-width:0;
+  width:100%;
+  max-width:100%;
+}
+.simulation-workspace .skills-cycle > .skill-list-section,
+.simulation-workspace .skills-cycle > .cycle-builder {
+  overflow-x:auto;
+}
+.simulation-workspace .skills-cycle .skill-editor {
+  min-width:0;
+  max-width:100%;
+  box-sizing:border-box;
+}
+
 .evolution-t1-list article { grid-template-columns:32px minmax(0,1fr) 52px; grid-template-rows:24px; }
 .evolution-t1-list .compact-art[data-tooltip]::after { left:0; width:240px; transform:translateY(4px); }
 .evolution-t1-list .compact-art[data-tooltip]:hover::after,.evolution-t1-list .compact-art[data-tooltip]:focus-visible::after { transform:translateY(0); }
@@ -377,7 +403,7 @@
 /* 기본 장비 탭의 세로 흐름: 좌측 장비·악세사리 아래 각인, 전체 하단 아크그리드 */
 @media (min-width:901px) {
   .sim-content:has(.equipment-layout) {
-    grid-template-columns:minmax(0,.95fr) minmax(0,.85fr) minmax(0,1.2fr);
+    grid-template-columns:minmax(0,.90fr) minmax(0,.80fr) minmax(0,1.30fr);
   }
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(1),
   .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) {
@@ -391,7 +417,7 @@
   .sim-content:has(.equipment-layout) > .engraving-section {
     grid-column:1 / 3;
     grid-row:2;
-    width:100%;
+    width:90%;
     min-width:0;
     margin-top:-8px;
   }
@@ -406,6 +432,7 @@
     grid-column:3;
     grid-row:1 / 3;
     align-self:start;
+    width:100%;
   }
   .sim-content:has(.equipment-layout) > .engraving-section {
     grid-column:1 / 3;
@@ -420,6 +447,11 @@
   }
   .equipment-ark-grid > section:first-child .avatar-section {
     margin-top:8px;
+  }
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .accessory-option-list select,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-editor,
+  .sim-content:has(.equipment-layout) .equipment-layout > .equipment-column:nth-child(2) .bracelet-option-list {
+    width:90%;
   }
   .equipment-ark-grid > section:first-child .avatar-table {
     padding-top:8px;
@@ -468,20 +500,71 @@
 }
 
 .internal-gear-debug { margin:0 0 10px; padding:9px 12px; border:1px solid #2d4158; border-radius:5px; background:#101722; }
-.floating-doping-panel { position:fixed; left:12px; top:180px; z-index:20; display:grid; gap:7px; width:150px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; }
-.floating-doping-panel label { display:flex; align-items:center; gap:6px; }
+.floating-doping-panel { position:fixed; left:12px; top:180px; z-index:1000; display:grid; gap:7px; width:90px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; overflow:visible; }
+.floating-doping-panel label { display:flex; align-items:center; justify-content:flex-start; gap:6px; width:100%; }
+.floating-doping-panel label { margin:0; }
+.floating-doping-panel label > input[type=checkbox] { flex:0 0 13px; width:13px; height:13px; margin:0; }
+.doping-buff-icon { position:relative; display:inline-flex; width:32px; height:32px; flex:0 0 32px; align-items:center; justify-content:center; cursor:help; }
+.doping-buff-icon .compact-art { width:32px; height:32px; overflow:hidden; }
+.doping-buff-icon .compact-art img { display:block; width:100%; height:100%; object-fit:contain; padding:1px; box-sizing:border-box; }
+.doping-buff-icon::after { position:absolute; left:calc(100% + 6px); top:50%; z-index:100000; width:max-content; max-width:190px; padding:5px 7px; border:1px solid #3b6b5a; border-radius:4px; background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:8px; line-height:1.35; opacity:0; pointer-events:none; transform:translateY(-50%) translateX(-3px); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
+.doping-buff-icon:hover::after,.doping-buff-icon:focus-within::after { opacity:1; transform:translateY(-50%) translateX(0); visibility:visible; }
+.floating-cycle-ratio-panel { position:fixed; right:8px; top:140px; z-index:20; display:grid; gap:5px; width:min(80vw,176px); padding:8px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 6px 18px #0006; color:#dce7f3; font-size:9px; }
+.floating-cycle-ratio-panel > strong { color:#eef5ff; font-size:10px; }
+.cycle-ratio-global-options { display:grid; grid-template-columns:1fr; gap:4px; margin-block:0; padding:5px; border:1px solid #31465e; border-radius:4px; background:#0c141f; }
+.cycle-ratio-global-options label { display:grid; grid-template-columns:16px minmax(0,1fr) 34px 10px; align-items:center; min-height:18px; justify-content:start; gap:3px; margin:0; color:#c9d7e7; font-size:8px; white-space:nowrap; }
+.cycle-ratio-global-options label > input[type=checkbox] { align-self:center; margin:0; justify-self:start; }
+.cycle-global-label { line-height:1.05; text-align:center; }
+.cycle-global-percent { align-self:center; line-height:1; text-align:center; }
+.cycle-ratio-global-options label input[type=number] { align-self:center; box-sizing:border-box; width:34px; height:18px; margin:0; padding:0 2px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
+.cycle-ratio-header, .cycle-ratio-row { display:grid; grid-template-columns:minmax(0,1fr) 40px 40px; align-items:center; gap:4px; }
+.cycle-ratio-header { color:#8fa0b5; font-size:8px; text-align:center; }
+.cycle-ratio-header span:first-child { text-align:left; }
+.cycle-ratio-list { display:grid; gap:3px; }
+.cycle-ratio-row { min-height:32px; padding:3px; border:1px solid #283b50; border-radius:4px; background:#0c141f; }
+.cycle-ratio-skill { display:flex; min-width:0; align-items:center; gap:4px; }
+.cycle-ratio-skill .compact-art { width:24px; height:24px; flex:0 0 24px; }
+.cycle-ratio-skill > span { overflow:hidden; color:#dce7f3; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
+.cycle-ratio-row input { box-sizing:border-box; width:100%; height:22px; padding:0 3px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
+.cycle-ratio-empty { color:#8293a8; font-size:8px; }
 .skill-evolution-extra { display:flex; grid-column:2; grid-row:1 / span 2; align-items:center; margin-top:2px; color:#91a4b9; font-size:8px; }
 .skill-evolution-extra b { color:#e6edf5; }
 @media (max-width:900px) { .floating-doping-panel { position:static; width:auto; margin:0 0 10px; } }
+@media (max-width:900px) { .floating-cycle-ratio-panel { position:static; width:auto; margin:0 0 10px; } }
+@media (min-width:901px) {
+  .simulation-workspace { position:relative; }
+  /* 중앙 콘텐츠의 좌우 외곽선과 각각 8px만 띄우고, 패널 자체는 원래 크기를 유지한다. */
+  .floating-doping-panel {
+    left:clamp(8px, calc(15.8% - 71px), 15.8%);
+    transform:none;
+  }
+  .floating-cycle-ratio-panel {
+    /* 도핑 패널과 동일하게 화면에 고정해 스크롤해도 함께 따라온다. */
+    position:fixed;
+    left:auto;
+    right:4.5vw;
+    top:140px;
+    transform:none;
+  }
+}
 .internal-gear-debug summary { cursor:pointer; color:#80e7bd; font-size:10px; font-weight:700; }
+.debug-json-export-button { margin-top:7px; padding:4px 7px; border:1px solid #36516d; border-radius:3px; background:#162536; color:#dce7f3; font-size:8px; cursor:pointer; }
+.debug-json-export-button:hover { border-color:#80e7bd; color:#80e7bd; }
 .internal-gear-debug-summary { display:flex; flex-wrap:wrap; gap:12px; margin-top:8px; color:#8fa0b5; font-size:9px; }
 .internal-gear-debug-summary b { margin-left:4px; color:#e8eef7; font-family:"DM Mono",monospace; }
+.internal-cycle-damage-debug { display:grid; gap:6px; margin-top:10px; padding-top:8px; border-top:1px solid #283547; color:#aebcd0; font-size:9px; }
+.internal-cycle-damage-debug > strong { color:#80e7bd; font-size:10px; }
+.internal-cycle-damage-debug > small { color:#77879d; }
+.internal-cycle-damage-debug-table { display:grid; grid-template-columns:minmax(110px,1.4fr) 70px minmax(110px,1fr) minmax(120px,1fr); gap:4px 8px; align-items:center; }
+.internal-cycle-damage-debug-table > span { color:#77879d; font-size:8px; }
+.internal-cycle-damage-debug-table > b { color:#e8eef7; font:700 9px "DM Mono",monospace; }
 .internal-gear-debug-rows { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); gap:5px; margin-top:8px; }
 .internal-gear-debug-rows > div { display:grid; gap:2px; min-width:0; padding:5px; border:1px solid #283547; border-radius:3px; color:#aebcd0; font:8px/1.3 "DM Mono",monospace; }
 .internal-gear-debug-rows > div.unresolved { border-color:#59393c; color:#dd9a9a; }
 .internal-gear-debug-rows strong { color:#d7e2ef; font:700 9px Manrope,sans-serif; }
 .internal-gear-debug-rows small { overflow:hidden; color:#77879d; font-size:7px; text-overflow:ellipsis; white-space:nowrap; }
 @media (max-width:900px) { .internal-gear-debug-rows { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:900px) { .internal-cycle-damage-debug-table { grid-template-columns:minmax(90px,1.2fr) 55px minmax(90px,1fr) minmax(100px,1fr); gap:4px; } }
 
 /* 좌측 장비 스택의 최종 배치 규칙: 기존 장비 레이아웃 규칙보다 우선한다. */
 @media (min-width:901px) {

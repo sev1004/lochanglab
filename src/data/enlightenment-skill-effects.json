@@ -1,0 +1,7 @@
+{
+  "연가심공": {
+    "type": "nextSkillDamage",
+    "maxLevel": 3,
+    "damagePerLevelPercent": 25
+  }
+}
