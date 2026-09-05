@@ -118,6 +118,7 @@ export function skillEvolutionDamageByBackAttack(
 
 export type EvolutionDamageInput = {
   evolution: readonly { name: string; level: number | null }[];
+  enlightenment?: readonly { name: string; level: number | null }[];
   evolutionRank?: number | null;
   attackSpeedPercent?: number;
   moveSpeedPercent?: number;

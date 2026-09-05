@@ -255,11 +255,15 @@ test("대미지·치명 트라이포드는 단일 스킬에만 각각 적용한�
 
 test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한다", () => {
   const base = calculateSingleSkillDamage({
-    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 } }),
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 },
+    }),
     skill: { name: "적룡필살", level: 1 },
   });
   const enhanced = calculateSingleSkillDamage({
-    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 } }),
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 },
+    }),
     leapEffects: [
       { name: "풀려난 힘", level: 2 },
       { name: "관통 필살", level: 2 },
@@ -273,14 +277,18 @@ test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한�
   assert.equal(enhanced.combat.stages.criticalRate, 1);
 
   const levelThree = calculateSingleSkillDamage({
-    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 } }),
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
     leapEffects: [{ name: "관통 필살", level: 3 }],
     skill: { name: "적룡필살", level: 1 },
   });
   assert.equal(levelThree.combat.stages.criticalRate, 1);
 
   const flurryAwakening = calculateSingleSkillDamage({
-    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 } }),
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 },
+    }),
     leapEffects: [
       { name: "강인한 타격", level: 1 },
       { name: "최후의 판단", level: 1 },
@@ -292,6 +300,289 @@ test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한�
   closeTo(flurryAwakening.awakeningDamageMultiplier, 1.25 * 1.3);
   closeTo(flurryAwakening.awakeningCriticalRateBonus, 0);
 });
+
+test("청룡진·백어택·연가심공 조건을 독립된 스킬 대미지 시나리오로 계산한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.2 },
+    }),
+    evolutionContext: {
+      evolution: [],
+      enlightenment: [{ name: "연가심공", level: 2 }],
+    },
+    snapshot: {
+      backAttackSuccessDamageMultiplier: 1.2,
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+
+  assert.equal(result.scenarios.length, 8);
+  const base = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+  const allConditions = result.scenarios.find(
+    (scenario) =>
+      scenario.conditions.azureDragonBuff &&
+      scenario.conditions.backAttack &&
+      scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(base.criticalRate, 0.2);
+  closeTo(allConditions.criticalRate, 0.5);
+  closeTo(allConditions.yeongaSimGongMultiplier, 1.5);
+  closeTo(allConditions.nonCriticalDamage / base.nonCriticalDamage, 1.2 * 1.5);
+});
+
+test("추가 피해와 특정 타입 피해는 서로 다른 배율로 곱한다", () => {
+  const base = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    skill: { name: "청룡진", level: 14 },
+  });
+  const enhanced = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    snapshot: {
+      additionalDamageMultiplier: 1.2,
+      specificTypeDamageMultiplier: 1.1,
+    },
+    skill: { name: "청룡진", level: 14 },
+  });
+
+  closeTo(enhanced.normalDamage / base.normalDamage, 1.2 * 1.1);
+});
+
+test("백어택 스킬 자체 피해는 항상, 성공 피해는 백어택 성공 시에만 적용한다", () => {
+  const baseline = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    skill: { name: "적룡포", level: 14 },
+  });
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    snapshot: {
+      backAttackSkillDamageMultiplier: 1.1,
+      backAttackSuccessDamageMultiplier: 1.2,
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+  const miss = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+  const hit = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(miss.nonCriticalDamage / baseline.normalDamage, 1.1);
+  closeTo(hit.nonCriticalDamage / miss.nonCriticalDamage, 1.2);
+});
+
+test("스킬 타입 배율은 스킬 태그에 맞는 조건만 곱한다", () => {
+  const focus = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    snapshot: {
+      focusSkillDamageMultiplier: 1.4,
+      flurrySkillDamageMultiplier: 1.5,
+      manaSkillDamageMultiplier: 1.2,
+      holdingCastingSkillDamageMultiplier: 1.3,
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+  const flurry = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    snapshot: {
+      focusSkillDamageMultiplier: 1.4,
+      flurrySkillDamageMultiplier: 1.5,
+      manaSkillDamageMultiplier: 1.2,
+      holdingCastingSkillDamageMultiplier: 1.3,
+    },
+    skill: { name: "이연격", level: 14 },
+  });
+
+  closeTo(focus.scenarios[0].skillTypeDamageMultiplier, 1.4 * 1.2 * 1.3);
+  closeTo(flurry.scenarios[0].skillTypeDamageMultiplier, 1.5 * 1.2);
+});
+
+test("공용 치피 스냅샷을 사용해도 스킬 트라이포드 치피를 추가한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 1 },
+    }),
+    snapshot: { criticalDamageMultiplier: 2 },
+    skill: {
+      name: "적룡포",
+      level: 14,
+      selectedTripodNames: ["파괴하는 창"],
+    },
+  });
+
+  closeTo(result.combat.stages.criticalDamageMultiplier, 2.6);
+  closeTo(result.maximumCriticalDamage / result.normalDamage, 2.6);
+});
+
+test("청룡진과 백어택 치적은 뭉툭한 가시 진화형 피해 계산 전에 적용한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.7 },
+    }),
+    evolutionContext: {
+      evolution: [{ name: "뭉툭한 가시", level: 2 }],
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+  const noCondition = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+  const azureAndBack = result.scenarios.find(
+    (scenario) =>
+      scenario.conditions.azureDragonBuff &&
+      scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(noCondition.evolutionDamageRate, 0.15);
+  closeTo(azureAndBack.rawCriticalRate, 1);
+  closeTo(azureAndBack.criticalRate, 0.8);
+  closeTo(azureAndBack.evolutionDamageRate, 0.45);
+});
+
+test("청룡진 스킬 자체도 청룡진 치적 시나리오를 가진다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.2 },
+    }),
+    skill: { name: "청룡진", level: 14 },
+  });
+  const buffed = result.scenarios.find(
+    (scenario) =>
+      scenario.conditions.azureDragonBuff && !scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(buffed.criticalRate, 0.4);
+});
+
+test("질서 코어의 같은 타입 피해 효과는 스킬별 독립 배율로 곱한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0 },
+    }),
+    snapshot: {
+      arkGridOrderSkillEffects: [
+        {
+          grade: "고대",
+          coreName: "A",
+          point: 10,
+          kind: "skillTypeDamage",
+          skillType: "focus",
+          percent: 5,
+        },
+        {
+          grade: "고대",
+          coreName: "B",
+          point: 17,
+          kind: "skillDamage",
+          skillNames: ["적룡포"],
+          percent: 12,
+        },
+      ],
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+
+  closeTo(result.arkGridOrder.damageMultiplier, 1.05 * 1.12);
+  closeTo(result.scenarios[0].skillTypeDamageMultiplier, 1.05 * 1.12);
+});
+
+test("질서 코어의 치적 감소와 치명타 적주피는 스킬 치명 계산에만 적용한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.5 },
+    }),
+    snapshot: {
+      criticalOutgoingMultiplier: 1.08,
+      arkGridOrderSkillEffects: [
+        {
+          grade: "유물",
+          coreName: "연가 창식",
+          point: 14,
+          kind: "criticalRate",
+          skillType: "focus",
+          percent: -20,
+        },
+        {
+          grade: "유물",
+          coreName: "연가 창식",
+          point: 14,
+          kind: "criticalOutgoingDamage",
+          skillType: "focus",
+          percent: 20,
+        },
+      ],
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+  const baseScenario = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(baseScenario.rawCriticalRate, 0.3);
+  closeTo(result.combat.stages.criticalOutgoingMultiplier, 1.08 * 1.2);
+});
+
+test("질서 코어의 강제 백어택은 미적중 시나리오에도 백어택 효과를 적용한다", () => {
+  const result = calculateSingleSkillDamage({
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.2 },
+    }),
+    snapshot: {
+      backAttackSuccessDamageMultiplier: 1.2,
+      arkGridOrderSkillEffects: [
+        {
+          grade: "유물",
+          coreName: "적룡의 기운",
+          point: 17,
+          kind: "forceBackAttack",
+          skillNames: ["적룡포"],
+        },
+      ],
+    },
+    skill: { name: "적룡포", level: 14 },
+  });
+  const missScenario = result.scenarios.find(
+    (scenario) =>
+      !scenario.conditions.azureDragonBuff &&
+      !scenario.conditions.backAttack &&
+      !scenario.conditions.yeongaSimGong,
+  )!;
+
+  closeTo(missScenario.rawCriticalRate, 0.3);
+  closeTo(missScenario.backAttackDamageMultiplier, 1.2);
+});
+
 test("뭉툭한 가시는 초과 치적을 진화형 피해로 변환하고 상한을 적용한다", () => {
   assert.equal(bluntSpikesEvolutionDamage(1.2, 1), 0.525);
   assert.equal(bluntSpikesEvolutionDamage(1.25, 2), 0.75);

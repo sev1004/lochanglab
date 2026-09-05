@@ -11,6 +11,20 @@ export type GlavierCooldownResolution = {
   pendingConditionalEffects: readonly GlavierTripodEffect[];
 };
 
+/** 정량 변화가 반영된 쿨타임에 쿨감(양수)·쿨증(음수) 원천을 곱연산한다. */
+export function applyCooldownReductionRates(
+  cooldownSeconds: number,
+  reductionRates: readonly number[],
+): number {
+  return reductionRates.reduce(
+    (current, rate) =>
+      current *
+      (1 -
+        Math.min(1, Math.max(-0.99, Number.isFinite(rate) ? rate : 0))),
+    Math.max(0, cooldownSeconds),
+  );
+}
+
 export function getGlavierSkill(skillName: string): GlavierSkillData | null {
   return GLAVIER_SKILL_BY_NAME[skillName] ?? null;
 }

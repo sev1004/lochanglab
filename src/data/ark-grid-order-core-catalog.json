@@ -1,0 +1,75 @@
+{
+  "version": 1,
+  "cores": [
+    {
+      "name": "적룡의 기운",
+      "classEngraving": "절정",
+      "number": 1,
+      "type": "해"
+    },
+    { "name": "적룡연격", "classEngraving": "절정", "number": 2, "type": "해" },
+    {
+      "name": "연가 창식",
+      "classEngraving": "절정",
+      "number": 3,
+      "type": "해"
+    },
+    { "name": "질풍연격", "classEngraving": "절제", "number": 1, "type": "해" },
+    { "name": "연가일섬", "classEngraving": "절제", "number": 2, "type": "해" },
+    { "name": "맹룡오격", "classEngraving": "절제", "number": 3, "type": "해" },
+
+    {
+      "name": "일점 집중",
+      "classEngraving": "절정",
+      "number": 1,
+      "type": "달"
+    },
+    {
+      "name": "집중 강화",
+      "classEngraving": "절정",
+      "number": 2,
+      "type": "달"
+    },
+    { "name": "청룡기", "classEngraving": "절정", "number": 3, "type": "달" },
+    {
+      "name": "맹룡의 기운",
+      "classEngraving": "절제",
+      "number": 1,
+      "type": "달"
+    },
+    { "name": "비기승화", "classEngraving": "절제", "number": 2, "type": "달" },
+    {
+      "name": "연환 타격",
+      "classEngraving": "절제",
+      "number": 3,
+      "type": "달"
+    },
+
+    {
+      "name": "진화의 끝",
+      "classEngraving": "절정",
+      "number": 1,
+      "type": "별"
+    },
+    {
+      "name": "한 점 돌파",
+      "classEngraving": "절정",
+      "number": 2,
+      "type": "별"
+    },
+    {
+      "name": "맹룡 회도",
+      "classEngraving": "절정",
+      "number": 3,
+      "type": "별"
+    },
+    {
+      "name": "이중 비기",
+      "classEngraving": "절제",
+      "number": 1,
+      "type": "별"
+    },
+    { "name": "환영", "classEngraving": "절제", "number": 2, "type": "별" },
+    { "name": "연격 난무", "classEngraving": "절제", "number": 3, "type": "별" }
+  ]
+}

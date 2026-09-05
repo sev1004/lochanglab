@@ -1,0 +1,839 @@
+{
+  "version": 1,
+  "stacking": "multiply",
+  "effects": [
+    {
+      "grade": "고대",
+      "coreName": "맹룡 회도",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["맹룡열파"],
+      "tripodName": "우회 베기",
+      "percent": 30
+    },
+    {
+      "grade": "유물",
+      "coreName": "맹룡 회도",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["맹룡열파"],
+      "tripodName": "우회 베기",
+      "percent": 30
+    },
+    {
+      "grade": "고대",
+      "coreName": "맹룡 회도",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파"],
+      "percent": 20
+    },
+    {
+      "grade": "유물",
+      "coreName": "맹룡 회도",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파"],
+      "percent": 13
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "맹룡오격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "맹룡오격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "고대",
+      "coreName": "맹룡오격",
+      "point": 17,
+      "kind": "operationTypeDamage",
+      "operationType": "콤보",
+      "percent": 20
+    },
+    {
+      "grade": "유물",
+      "coreName": "맹룡오격",
+      "point": 17,
+      "kind": "operationTypeDamage",
+      "operationType": "콤보",
+      "percent": 20
+    },
+    {
+      "grade": "고대",
+      "coreName": "맹룡오격",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "맹룡의 기운",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "맹룡의 기운",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "비기승화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "비기승화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "고대",
+      "coreName": "비기승화",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 18
+    },
+    {
+      "grade": "유물",
+      "coreName": "비기승화",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 15
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "연가 창식",
+      "point": 14,
+      "kind": "criticalRate",
+      "skillType": "focus",
+      "percent": -20
+    },
+    {
+      "grade": "유물",
+      "coreName": "연가 창식",
+      "point": 14,
+      "kind": "criticalRate",
+      "skillType": "focus",
+      "percent": -20
+    },
+    {
+      "grade": "고대",
+      "coreName": "연가 창식",
+      "point": 14,
+      "kind": "criticalOutgoingDamage",
+      "skillType": "focus",
+      "percent": 20
+    },
+    {
+      "grade": "유물",
+      "coreName": "연가 창식",
+      "point": 14,
+      "kind": "criticalOutgoingDamage",
+      "skillType": "focus",
+      "percent": 20
+    },
+    {
+      "grade": "고대",
+      "coreName": "연가 창식",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 34
+    },
+    {
+      "grade": "유물",
+      "coreName": "연가 창식",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 28
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "연가일섬",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "연가일섬",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "고대",
+      "coreName": "연가일섬",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "연가일섬",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 5
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "연격 난무",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["이연격"],
+      "percent": 250
+    },
+    {
+      "grade": "유물",
+      "coreName": "연격 난무",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["이연격"],
+      "percent": 250
+    },
+    {
+      "grade": "고대",
+      "coreName": "연격 난무",
+      "point": 10,
+      "kind": "cooldownFlatSeconds",
+      "skillNames": ["이연격"],
+      "seconds": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "연격 난무",
+      "point": 10,
+      "kind": "cooldownFlatSeconds",
+      "skillNames": ["이연격"],
+      "seconds": 10
+    },
+    {
+      "grade": "고대",
+      "coreName": "연격 난무",
+      "point": 14,
+      "kind": "skillDamage",
+      "skillNames": ["공의연무"],
+      "percent": 350
+    },
+    {
+      "grade": "유물",
+      "coreName": "연격 난무",
+      "point": 14,
+      "kind": "skillDamage",
+      "skillNames": ["공의연무"],
+      "percent": 350
+    },
+    {
+      "grade": "고대",
+      "coreName": "연격 난무",
+      "point": 14,
+      "kind": "cooldownFlatSeconds",
+      "skillNames": ["공의연무"],
+      "seconds": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "연격 난무",
+      "point": 14,
+      "kind": "cooldownFlatSeconds",
+      "skillNames": ["공의연무"],
+      "seconds": 10
+    },
+    {
+      "grade": "고대",
+      "coreName": "연격 난무",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["맹룡열파"],
+      "tripodName": "추가 베기",
+      "percent": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "연격 난무",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["맹룡열파"],
+      "tripodName": "추가 베기",
+      "percent": 10
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "연환 타격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "연환 타격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "고대",
+      "coreName": "연환 타격",
+      "point": 17,
+      "kind": "operationTypeDamage",
+      "operationType": "콤보",
+      "percent": 12
+    },
+    {
+      "grade": "유물",
+      "coreName": "연환 타격",
+      "point": 17,
+      "kind": "operationTypeDamage",
+      "operationType": "콤보",
+      "percent": 10
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "이중 비기",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1
+    },
+    {
+      "grade": "유물",
+      "coreName": "이중 비기",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1
+    },
+    {
+      "grade": "고대",
+      "coreName": "이중 비기",
+      "point": 14,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파"],
+      "percent": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "이중 비기",
+      "point": 14,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파"],
+      "percent": 10
+    },
+    {
+      "grade": "고대",
+      "coreName": "이중 비기",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["반월섬"],
+      "percent": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "이중 비기",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["반월섬"],
+      "percent": 10
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "일점 집중",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1.8
+    },
+    {
+      "grade": "유물",
+      "coreName": "일점 집중",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1.8
+    },
+    {
+      "grade": "고대",
+      "coreName": "일점 집중",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포"],
+      "percent": 23
+    },
+    {
+      "grade": "유물",
+      "coreName": "일점 집중",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포"],
+      "percent": 20
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "적룡연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "고대",
+      "coreName": "적룡연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 5
+    },
+    {
+      "grade": "고대",
+      "coreName": "적룡연격",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": [
+        "맹룡열파",
+        "반월섬",
+        "맹룡난무",
+        "적룡포",
+        "적룡필살",
+        "굉열파",
+        "유성강천"
+      ],
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡연격",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": [
+        "맹룡열파",
+        "반월섬",
+        "맹룡난무",
+        "적룡포",
+        "적룡필살",
+        "굉열파",
+        "유성강천"
+      ],
+      "percent": 5
+    },
+    {
+      "grade": "고대",
+      "coreName": "적룡연격",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "적룡의 기운",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1.8
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡의 기운",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1.8
+    },
+    {
+      "grade": "고대",
+      "coreName": "적룡의 기운",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포", "적룡필살"],
+      "percent": 12
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡의 기운",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포", "적룡필살"],
+      "percent": 12
+    },
+    {
+      "grade": "고대",
+      "coreName": "적룡의 기운",
+      "point": 17,
+      "kind": "forceBackAttack",
+      "skillNames": ["적룡포", "적룡필살"]
+    },
+    {
+      "grade": "유물",
+      "coreName": "적룡의 기운",
+      "point": 17,
+      "kind": "forceBackAttack",
+      "skillNames": ["적룡포", "적룡필살"]
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "진화의 끝",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포"],
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "진화의 끝",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["적룡포"],
+      "percent": 5
+    },
+    {
+      "grade": "고대",
+      "coreName": "진화의 끝",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["적룡포"],
+      "tripodName": "진화하는 창술",
+      "percent": -30
+    },
+    {
+      "grade": "유물",
+      "coreName": "진화의 끝",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["적룡포"],
+      "tripodName": "진화하는 창술",
+      "percent": -30
+    },
+    {
+      "grade": "고대",
+      "coreName": "진화의 끝",
+      "point": 17,
+      "kind": "criticalRate",
+      "skillNames": ["적룡포"],
+      "tripodName": "진화하는 창술",
+      "percent": 100
+    },
+    {
+      "grade": "유물",
+      "coreName": "진화의 끝",
+      "point": 17,
+      "kind": "criticalRate",
+      "skillNames": ["적룡포"],
+      "tripodName": "진화하는 창술",
+      "percent": 100
+    },
+    {
+      "grade": "고대",
+      "coreName": "진화의 끝",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 1
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "질풍연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "유물",
+      "coreName": "질풍연격",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1.5
+    },
+    {
+      "grade": "고대",
+      "coreName": "질풍연격",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파", "반월섬"],
+      "percent": 15
+    },
+    {
+      "grade": "유물",
+      "coreName": "질풍연격",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["맹룡열파", "반월섬"],
+      "percent": 15
+    },
+    {
+      "grade": "고대",
+      "coreName": "질풍연격",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": 1
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "집중 강화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "유물",
+      "coreName": "집중 강화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "고대",
+      "coreName": "집중 강화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "집중 강화",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 5
+    },
+    {
+      "grade": "고대",
+      "coreName": "집중 강화",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 7
+    },
+    {
+      "grade": "유물",
+      "coreName": "집중 강화",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 6
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "청룡기",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 10
+    },
+    {
+      "grade": "유물",
+      "coreName": "청룡기",
+      "point": 17,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 8
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "한 점 돌파",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "유물",
+      "coreName": "한 점 돌파",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "flurry",
+      "percent": -20
+    },
+    {
+      "grade": "고대",
+      "coreName": "한 점 돌파",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 3
+    },
+    {
+      "grade": "유물",
+      "coreName": "한 점 돌파",
+      "point": 10,
+      "kind": "skillTypeDamage",
+      "skillType": "focus",
+      "percent": 3
+    },
+    {
+      "grade": "고대",
+      "coreName": "한 점 돌파",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["유성강천"],
+      "tripodName": "화력 조절",
+      "percent": 7
+    },
+    {
+      "grade": "유물",
+      "coreName": "한 점 돌파",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["유성강천"],
+      "tripodName": "화력 조절",
+      "percent": 7
+    },
+    {
+      "grade": "고대",
+      "coreName": "한 점 돌파",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["사두룡격", "굉열파", "적룡포"],
+      "percent": 7
+    },
+    {
+      "grade": "유물",
+      "coreName": "한 점 돌파",
+      "point": 17,
+      "kind": "skillDamage",
+      "skillNames": ["사두룡격", "굉열파", "적룡포"],
+      "percent": 5
+    },
+
+    {
+      "grade": "고대",
+      "coreName": "환영",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 5
+    },
+    {
+      "grade": "유물",
+      "coreName": "환영",
+      "point": 10,
+      "kind": "skillDamage",
+      "skillNames": ["연가비기"],
+      "percent": 5
+    },
+    {
+      "grade": "고대",
+      "coreName": "환영",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["청룡출수"],
+      "tripodName": "환영 출수",
+      "percent": 18
+    },
+    {
+      "grade": "유물",
+      "coreName": "환영",
+      "point": 14,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["청룡출수"],
+      "tripodName": "환영 출수",
+      "percent": 18
+    },
+    {
+      "grade": "고대",
+      "coreName": "환영",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["선풍참혼"],
+      "tripodName": "협력 강화",
+      "percent": 20
+    },
+    {
+      "grade": "유물",
+      "coreName": "환영",
+      "point": 17,
+      "kind": "tripodSkillDamage",
+      "skillNames": ["선풍참혼"],
+      "tripodName": "협력 강화",
+      "percent": 20
+    }
+  ],
+  "excluded": [
+    {
+      "coreName": "적룡연격",
+      "point": 14,
+      "effect": "집중 스킬 재사용 대기시간 60% 감소",
+      "reason": "사용자 지정 미적용"
+    },
+    {
+      "coreName": "적룡연격",
+      "point": 14,
+      "effect": "약점 공략 받는 피해 8% 증가",
+      "reason": "사용자 지정 미적용"
+    },
+    {
+      "coreName": "연가일섬",
+      "point": 14,
+      "effect": "연가비기 재사용 대기시간 10% 감소",
+      "reason": "사용자 지정 미적용"
+    }
+  ]
+}
