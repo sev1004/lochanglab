@@ -63,6 +63,7 @@ export type CriticalRateOptionSnapshot = {
   engravingRate: number;
   stoneRate: number;
   arkGridRate: number;
+  synergyRate: number;
   total: number;
 };
 export type CriticalDamageSnapshot = {
@@ -371,6 +372,7 @@ export function createCriticalRateOptionSnapshot(source: {
     description?: string | null;
     point?: number | null;
   }[];
+  synergyRate?: number;
 }): CriticalRateOptionSnapshot {
   const statRate = source.criticalStat.criticalRate;
   const accessoryRate = source.accessories.reduce(
@@ -438,7 +440,8 @@ export function createCriticalRateOptionSnapshot(source: {
     evolutionRate +
     engravingRate +
     stoneRate +
-    arkGridRate;
+    arkGridRate +
+    (source.synergyRate ?? 0);
   return {
     statRate,
     accessoryRate,
@@ -447,6 +450,7 @@ export function createCriticalRateOptionSnapshot(source: {
     engravingRate,
     stoneRate,
     arkGridRate,
+    synergyRate: source.synergyRate ?? 0,
     total,
   };
 }

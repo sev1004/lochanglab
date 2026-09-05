@@ -10,7 +10,7 @@ export type EquipmentProfile = {
   name: string;
   icon: string | null;
   grade: string;
-  simulationGrade: "전율" | "결단" | "T4 전율" | "T4 업화" | "T4 결단" | "T4 유물" | "T4 고대" | "영웅" | "전설" | "유물" | "고대";
+  simulationGrade: "전율" | "결단" | "참월 : 의" | "T4 전율" | "T4 업화" | "T4 결단" | "T4 유물" | "T4 고대" | "영웅" | "전설" | "유물" | "고대";
   tier: number | null;
   quality: number | null;
   itemLevel: string | null;
@@ -220,9 +220,13 @@ function mapEquipmentItem(item: LostArkEquipment, index: number): EquipmentProfi
   const baseStats = tooltip.lines
     .filter((line) => /^(힘|민첩|지능|체력)\s*\+?[\d,]+$/.test(line))
     .filter((line, lineIndex, values) => values.indexOf(line) === lineIndex);
-  const simulationGrade = slot === "완갑"
-    ? item.Grade === "영웅" || item.Grade === "전설" || item.Grade === "유물" || item.Grade === "고대" ? item.Grade : "유물"
-    : item.Name?.includes("결단") ? "결단" : item.Name?.includes("전율") ? "전율" : "전율";
+  const isChamwolWeapon =
+    slot === "무기" && /참월\s*[:：]?\s*의/.test(item.Name ?? "");
+  const simulationGrade = isChamwolWeapon
+    ? "참월 : 의"
+    : slot === "완갑"
+      ? item.Grade === "영웅" || item.Grade === "전설" || item.Grade === "유물" || item.Grade === "고대" ? item.Grade : "유물"
+      : item.Name?.includes("결단") ? "결단" : item.Name?.includes("전율") ? "전율" : "전율";
 
   return {
     id: `${slot}-${index}`,
