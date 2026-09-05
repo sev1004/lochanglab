@@ -3824,8 +3824,8 @@ export default function Home() {
         <div className="brand">
           <span className="brand-mark">G</span>
           <div>
-            <strong>GLAVIER</strong>
-            <small>DPS SIMULATOR</small>
+            <strong>창술사 DPS</strong>
+            <small>시뮬레이터</small>
           </div>
         </div>
         <nav className="main-menu">
