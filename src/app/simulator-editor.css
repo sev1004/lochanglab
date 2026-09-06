@@ -13,8 +13,8 @@
 .quality-art .compact-art { width:52px; height:52px; }
 .quality-art > .quality-gold,.quality-art > .quality-purple,.quality-art > .quality-sky { position:absolute; right:0; bottom:0; left:0; min-height:14px; padding:2px 0; color:#1f1710; font:800 8px Manrope, sans-serif; line-height:10px; text-align:center; white-space:nowrap; }
 .quality-gold { background:#e2af22; }.quality-purple { background:#bc9dff; }.quality-sky { background:#81d3f4; }
-.gear-fields { display:grid; grid-template-columns:78px 66px; grid-template-rows:13px 23px 23px; grid-template-areas:"level level" "grade quality" "enhance ."; align-content:start; gap:3px 5px; min-width:0; }
-.gear-fields > small { grid-area:level; color:#92a6c4; font:10px "DM Mono"; line-height:13px; }
+.gear-fields { display:grid; grid-template-columns:78px 66px; grid-template-rows:23px 23px; grid-template-areas:"grade quality" "enhance ."; align-content:center; gap:3px 5px; min-width:0; }
+.gear-fields.no-quality { box-sizing:border-box; align-content:start; padding-top:4px; }
 .gear-fields label { grid-area:quality; display:flex; align-items:center; gap:4px; color:#8995a6; font-size:9px; white-space:nowrap; }
 .gear-fields select,.gear-fields input { min-width:0; height:23px; margin:0; padding:1px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }.accessory-meta select,.accessory-meta input,.stone-editor select,.bracelet-editor select,.engraving-editor select,.passive-row select,.core-grid select,.gem-editor select { min-width:0; height:27px; margin:0; padding:2px 5px; background:#0c1118; border:1px solid #344154; border-radius:3px; color:#edf2f7; font-size:9px; }
 .gear-fields > select:first-of-type { grid-area:grade; width:78px; }.gear-fields > select:last-of-type { grid-area:enhance; width:78px; }.gear-fields label input { width:41px; padding:2px; text-align:center; }
@@ -30,6 +30,7 @@
 .bracelet-unavailable { display:grid; gap:4px; padding-top:6px; border-top:1px solid #283547; }.bracelet-unavailable > small { color:#8995a6; font-size:9px; }.bracelet-unavailable > span { padding:5px 6px; border:1px solid #344154; border-radius:3px; background:#111722; color:#7f8b9b; font-size:9px; }
 .bracelet-catalog-review { margin-top:12px; border-top:1px solid #283547; padding-top:10px; }.bracelet-catalog-review summary { display:flex; align-items:center; gap:6px; color:#b9c6d8; font-size:10px; cursor:pointer; }.bracelet-catalog-review summary b { color:#80e7bd; }.bracelet-catalog-review summary span { margin-left:auto; padding:2px 5px; border-radius:3px; font-size:8px; }.catalog-valid { background:#17352d; color:#80e7bd; }.catalog-invalid { background:#48242a; color:#ff9e9e; }.bracelet-catalog-table { display:grid; margin-top:9px; max-height:360px; overflow:auto; border:1px solid #283547; }.catalog-head,.catalog-row { display:grid; grid-template-columns:100px repeat(3,minmax(150px,1fr)); }.catalog-head { position:sticky; top:0; z-index:1; background:#182232; }.catalog-head strong,.catalog-row > strong,.catalog-row > span { padding:6px; border-right:1px solid #283547; border-bottom:1px solid #283547; font-size:8px; }.catalog-row > span:last-child,.catalog-head strong:last-child { border-right:0; }.catalog-row > strong { color:#d5b880; }.catalog-row small { display:block; margin-top:2px; color:#68778a; font:7px "DM Mono"; overflow-wrap:anywhere; }
 .engraving-section { grid-column:1 / -1; }.engraving-editor { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:7px; }.engraving-editor > div { display:grid; grid-template-columns:32px minmax(0,1fr); gap:6px; align-items:center; padding:8px; background:#101722; }.engraving-editor .compact-art { width:32px; height:32px; }.engraving-card-content { min-width:0; }.engraving-controls { display:grid; grid-template-columns:1fr 48px; gap:4px; }.engraving-card-content > select { width:100%; margin-top:5px; }
+.engraving-editor > .stone-editor { display:grid; grid-template-columns:32px minmax(0,1fr); align-items:center; gap:6px; min-width:0; padding:8px; background:#101722; }.engraving-editor > .stone-editor .compact-art { width:32px; height:32px; }.engraving-editor > .stone-editor .stone-card-content { display:grid; gap:4px; min-width:0; }.engraving-editor > .stone-editor .stone-row { display:grid; grid-template-columns:minmax(0,1fr) 48px; gap:4px; min-width:0; }.engraving-editor > .stone-editor select { width:100%; min-width:0; margin:0; }
 .passive-editor { min-width:0; padding:10px; background:#101722; border:1px solid #283547; border-radius:4px; }.passive-editor h3 { margin:0; font-size:11px; }.passive-row { display:grid; grid-template-columns:minmax(0,1fr) 58px; gap:5px; margin-top:5px; }.passive-row select { width:100%; }.passive-choice-heading { display:flex; align-items:center; justify-content:space-between; gap:6px; margin-bottom:7px; }.passive-choice-heading span { padding:2px 5px; border-radius:3px; background:#1a2c2c; color:#80e7bd; font:8px "DM Mono"; }.core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-bottom:12px; }.core-grid article { display:grid; grid-template-columns:38px 1fr 70px 58px 42px; align-items:center; gap:5px; padding:8px; background:#101722; }.core-grid b { color:#80e7bd; font:500 10px "DM Mono"; }
 .ark-columns { align-items:start; gap:8px; }.evolution-tier-stack { display:grid; grid-column:1 / -1; gap:6px; min-width:0; }.evolution-t1-editor,.evolution-tier-editor { grid-column:1 / -1; }.evolution-t1-heading { min-width:0; }.evolution-t1-heading h3 { margin:0; }.evolution-t1-heading p { margin:3px 0 7px; color:#8995a6; font-size:8px; line-height:1.35; }.evolution-t1-list { display:grid; grid-template-columns:1fr; gap:4px; }.evolution-t1-list article { display:grid; grid-template-columns:32px minmax(0,1fr) 56px; grid-template-rows:24px minmax(13px,auto); align-items:center; gap:3px 6px; min-width:0; padding:5px; border:1px solid #283547; border-radius:3px; background:#0c1118; }.evolution-t1-list .compact-art { grid-row:1 / -1; width:32px; height:32px; }.evolution-t1-controls { display:grid; min-width:0; gap:1px; }.evolution-t1-controls select,.evolution-t1-level { width:100%; min-width:0; height:22px; margin:0; padding:2px 4px; border:1px solid #344154; border-radius:3px; background:#111b28; color:#edf2f7; font-size:8px; }.evolution-t1-controls strong { overflow:hidden; color:#d5b880; font-size:8px; line-height:11px; text-overflow:ellipsis; white-space:nowrap; }.evolution-t1-list small { grid-column:2 / 4; overflow:hidden; color:#80e7bd; font:8px "DM Mono"; line-height:1.3; text-overflow:ellipsis; white-space:nowrap; }
 .skill-editor .skill-gems { flex-wrap:wrap; justify-content:flex-end; max-width:420px; }.gem-editor { display:grid; grid-template-columns:30px 62px 58px 22px; align-items:center; gap:3px; }.gem-editor .compact-art { width:30px; height:30px; }.gem-editor button,.gem-add-button { height:30px; padding:0 7px; background:#243244; color:#d7e2ef; }.gem-add-button:disabled { cursor:not-allowed; opacity:.35; }.limit-reached,.validation-message { color:#ff9e9e!important; }.validation-message { margin:-4px 0 10px; font-size:10px; }
@@ -112,6 +113,7 @@
 
 /* 로펙 스타일의 아크그리드 카드: 코어 아이콘, 두 단계 선택, 포인트 배지, 조각 슬롯. */
 .equipment-ark-grid > section:last-child { min-width:0; }
+.equipment-ark-grid > section:first-child { border-radius:5px; }
 .equipment-ark-grid > section:last-child .core-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:0; }
 .equipment-ark-grid > section:last-child .core-grid article { position:relative; display:grid; grid-template-columns:40px minmax(0,1fr); grid-template-rows:24px 24px 20px; align-items:center; gap:4px 7px; min-height:76px; padding:7px; border:1px solid #283547; border-radius:6px; background:#101722; }
 .equipment-ark-grid > section:last-child .core-grid .compact-art { grid-column:1; grid-row:1 / 3; width:40px; height:40px; align-self:center; }
@@ -150,13 +152,10 @@
 .equipment-ark-grid > section:first-child .engraving-section .engraving-card-content > select { margin-top:0; }
 /* 어빌리티 스톤은 각인의 여섯 번째 슬롯으로 배치한다. */
 @media (min-width:901px) {
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor { display:grid; grid-template-columns:28px minmax(0,1fr) 36px; grid-template-rows:22px 22px; align-items:center; gap:3px 5px; min-width:0; padding:5px; background:#101722; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .compact-art { grid-column:1; grid-row:1 / 3; width:28px; height:28px; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor > div,.equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row { display:contents; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(1) select:first-child { grid-column:2; grid-row:1; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(1) select:last-child { grid-column:3; grid-row:1; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(2) select:first-child { grid-column:2; grid-row:2; }
-  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row:nth-child(2) select:last-child { grid-column:3; grid-row:2; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor { display:grid; grid-template-columns:44px minmax(0,1fr); align-items:center; gap:5px; min-width:0; min-height:55px; padding:5px; background:#101722; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .compact-art { justify-self:center; width:28px; height:28px; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-card-content { display:grid; gap:3px; min-width:0; }
+  .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor .stone-row { display:grid; grid-template-columns:minmax(0,1fr) 36px; gap:4px; min-width:0; }
   .equipment-ark-grid > section:first-child .engraving-section .engraving-editor > .stone-editor select { width:100%; min-width:0; height:22px; margin:0; padding:1px 3px; font-size:8px; }
 }
 @media (max-width:900px) {
@@ -499,19 +498,21 @@
   }
 }
 
-.internal-gear-debug { margin:0 0 10px; padding:9px 12px; border:1px solid #2d4158; border-radius:5px; background:#101722; }
-.floating-doping-panel { position:fixed; left:12px; top:180px; z-index:1000; display:grid; gap:7px; width:110px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; overflow:visible; }
+.simulation-debug-footer { margin-top:12px; }
+.internal-gear-debug { margin:0; padding:9px 12px; border:1px solid #2d4158; border-radius:5px; background:#101722; }
+.floating-doping-panel { position:fixed; left:-4px; top:180px; z-index:1000; display:grid; gap:7px; width:114px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; overflow:visible; }
 .floating-doping-panel label { display:flex; align-items:center; justify-content:flex-start; gap:6px; width:100%; }
 .floating-doping-panel label { margin:0; }
 .floating-doping-panel label > input[type=checkbox] { flex:0 0 13px; width:13px; height:13px; margin:0; }
+.doping-buff-label { min-width:0; color:#dce7f3; font-size:10px; line-height:1; white-space:nowrap; }
 .critical-rate-synergy-control { gap:4px !important; white-space:nowrap; }
 .critical-rate-synergy-control > input[type=number] { width:38px; min-width:0; padding:3px 4px; }
-.doping-buff-icon { position:relative; display:inline-flex; width:32px; height:32px; flex:0 0 32px; align-items:center; justify-content:center; cursor:help; }
-.doping-buff-icon .compact-art { width:32px; height:32px; overflow:hidden; }
+.doping-buff-icon { position:relative; display:inline-flex; width:34px; height:34px; flex:0 0 34px; align-items:center; justify-content:center; cursor:help; }
+.doping-buff-icon .compact-art { width:34px; height:34px; overflow:hidden; }
 .doping-buff-icon .compact-art img { display:block; width:100%; height:100%; object-fit:contain; padding:1px; box-sizing:border-box; }
 .doping-buff-icon::after { position:absolute; left:calc(100% + 6px); top:50%; z-index:100000; width:max-content; max-width:190px; padding:5px 7px; border:1px solid #3b6b5a; border-radius:4px; background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:8px; line-height:1.35; opacity:0; pointer-events:none; transform:translateY(-50%) translateX(-3px); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
 .doping-buff-icon:hover::after,.doping-buff-icon:focus-within::after { opacity:1; transform:translateY(-50%) translateX(0); visibility:visible; }
-.floating-cycle-ratio-panel { position:fixed; right:8px; top:140px; z-index:20; display:grid; gap:5px; width:min(80vw,176px); padding:8px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 6px 18px #0006; color:#dce7f3; font-size:9px; }
+.floating-cycle-ratio-panel { position:fixed; right:8px; top:140px; z-index:20; display:grid; gap:5px; width:clamp(116px,14vw,196px); padding:8px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 6px 18px #0006; color:#dce7f3; font-size:9px; }
 .floating-cycle-ratio-panel > strong { color:#eef5ff; font-size:10px; }
 .cycle-ratio-global-options { display:grid; grid-template-columns:1fr; gap:4px; margin-block:0; padding:5px; border:1px solid #31465e; border-radius:4px; background:#0c141f; }
 .cycle-ratio-global-options label { display:grid; grid-template-columns:16px minmax(0,1fr) 34px 10px; align-items:center; min-height:18px; justify-content:start; gap:3px; margin:0; color:#c9d7e7; font-size:8px; white-space:nowrap; }
@@ -519,7 +520,7 @@
 .cycle-global-label { line-height:1.05; text-align:center; }
 .cycle-global-percent { align-self:center; line-height:1; text-align:center; }
 .cycle-ratio-global-options label input[type=number] { align-self:center; box-sizing:border-box; width:34px; height:18px; margin:0; padding:0 2px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
-.cycle-ratio-header, .cycle-ratio-row { display:grid; grid-template-columns:minmax(0,1fr) 40px 40px; align-items:center; gap:4px; }
+.cycle-ratio-header, .cycle-ratio-row { display:grid; grid-template-columns:minmax(0,1fr) 44px 44px; align-items:center; gap:4px; }
 .cycle-ratio-header { color:#8fa0b5; font-size:8px; text-align:center; }
 .cycle-ratio-header span:first-child { text-align:left; }
 .cycle-ratio-list { display:grid; gap:3px; }
@@ -527,8 +528,12 @@
 .cycle-ratio-skill { display:flex; min-width:0; align-items:center; gap:4px; }
 .cycle-ratio-skill .compact-art { width:24px; height:24px; flex:0 0 24px; }
 .cycle-ratio-skill > span { overflow:hidden; color:#dce7f3; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }
-.cycle-ratio-row input { box-sizing:border-box; width:100%; height:22px; padding:0 3px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
+.cycle-ratio-row input { box-sizing:border-box; width:100%; height:22px; padding:0 2px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:8px "DM Mono",monospace; text-align:center; }
 .cycle-ratio-empty { color:#8293a8; font-size:8px; }
+.dps-screenshot-file-input { position:absolute; width:1px; height:1px; overflow:hidden; opacity:0; pointer-events:none; }
+.dps-screenshot-upload-button { width:100%; min-height:26px; padding:4px 6px; border:1px solid #36516d; border-radius:4px; background:#162536; color:#dce7f3; font-size:8px; cursor:pointer; }
+.dps-screenshot-upload-button:hover { border-color:#80e7bd; color:#80e7bd; }
+.dps-screenshot-status { color:#91a4b9; font-size:7px; line-height:1.35; word-break:keep-all; }
 .skill-evolution-extra { display:flex; grid-column:2; grid-row:1 / span 2; align-items:center; margin-top:2px; color:#91a4b9; font-size:8px; }
 .skill-evolution-extra b { color:#e6edf5; }
 @media (max-width:900px) { .floating-doping-panel { position:static; width:auto; margin:0 0 10px; } }
@@ -537,14 +542,14 @@
   .simulation-workspace { position:relative; }
   /* 중앙 콘텐츠의 좌우 외곽선과 각각 8px만 띄우고, 패널 자체는 원래 크기를 유지한다. */
   .floating-doping-panel {
-    left:clamp(8px, calc(15.8% - 89px), 15.8%);
+    left:clamp(8px, calc(15.8% - 93px), 15.8%);
     transform:none;
   }
   .floating-cycle-ratio-panel {
-    /* 도핑 패널과 동일하게 화면에 고정해 스크롤해도 함께 따라온다. */
+    /* 150% 확대된 셸의 우측 경계 바깥에 실제 화면 기준 8px 간격을 둔다. */
     position:fixed;
-    left:auto;
-    right:4.5vw;
+    left:calc(56.13vw - 31px);
+    right:auto;
     top:140px;
     transform:none;
   }
@@ -586,7 +591,16 @@
   .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(1) {
     grid-column:1;
     grid-row:1;
-    align-self:start;
+    align-self:stretch;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(1) > .equipment-section {
+    display:flex;
+    height:100%;
+    flex-direction:column;
+  }
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(1) .equipment-edit-grid {
+    flex:1;
+    align-content:space-between;
   }
   .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout > .equipment-column:nth-child(2) {
     grid-column:2;
