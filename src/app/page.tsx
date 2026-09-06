@@ -100,6 +100,14 @@ import blessingBuffIcon from "@/img/에아달린축복buff.png";
 import wineBuffIcon from "@/img/베르닐와인buff.png";
 import azenaBuffIcon from "@/img/Azenabuff.png";
 import vulnerableAttributeBuffIcon from "@/img/취약속성buff.png";
+import usageApiImage from "@/img/usage-guide/01-api.png";
+import usageSearchImage from "@/img/usage-guide/02-search.png";
+import usageEquipmentImage from "@/img/usage-guide/03-equipment.png";
+import usageDopingImage from "@/img/usage-guide/04-doping.png";
+import usageCycleImage from "@/img/usage-guide/05-cycle.png";
+import usageOcrImage from "@/img/usage-guide/06-ocr.png";
+import usageSkillCycleImage from "@/img/usage-guide/06-skill-cycle.png";
+import usageComparisonImage from "@/img/usage-guide/06-comparison.png";
 import engravingValues from "@/data/engraving-outgoing-damage.json";
 import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
 
@@ -1515,8 +1523,12 @@ function Artwork({
   title?: string;
 }) {
   return (
-    <span className="compact-art" aria-label={title} data-tooltip={title}>
-      {icon ? <img src={icon} alt="" /> : label}
+    <span
+      className={`compact-art${icon ? "" : " compact-art-empty"}`}
+      aria-label={title}
+      data-tooltip={title}
+    >
+      {icon ? <img src={icon} alt="" /> : <span>{label}</span>}
     </span>
   );
 }
@@ -3642,68 +3654,94 @@ function NoticePage() {
 }
 
 function UsagePage() {
+  const guideSteps = [
+    {
+      number: "01",
+      title: "API 키 설정",
+      description:
+        "API 설정 탭에서 로스트아크 Open API 키를 입력하세요. 개인 PC에서만 사용하는 경우 저장할 수 있으며, 공용 PC에서는 저장하지 않는 것을 권장합니다.",
+      image: usageApiImage,
+      alt: "API 키 설정 화면",
+    },
+    {
+      number: "02",
+      title: "캐릭터 조회",
+      description:
+        "상단 캐릭터명 입력란에 조회할 캐릭터명을 입력하고 검색하세요. API 기준의 장비, 각인, 아크패시브, 스킬과 보석을 불러옵니다.",
+      image: usageSearchImage,
+      alt: "캐릭터 조회 결과 화면",
+    },
+    {
+      number: "03",
+      title: "장비와 도핑 조정",
+      description:
+        "기본 장비 탭에서 장비·악세사리·각인·아크패시브·보석을 확인하고 필요한 값만 수정하세요. 좌측 도핑 패널은 체크한 항목만 계산에 반영됩니다.",
+      image: usageEquipmentImage,
+      alt: "장비 설정 화면",
+    },
+    {
+      number: "04",
+      title: "도핑 효과 확인",
+      description:
+        "도핑 아이콘에 마우스를 올리면 적용 효과를 확인할 수 있습니다. 정열·만찬·아제나 등 사용할 효과를 체크하면 예상 DPS에 즉시 반영됩니다.",
+      image: usageDopingImage,
+      alt: "도핑 설정 화면",
+    },
+    {
+      number: "05",
+      title: "전투 사이클 구성",
+      description:
+        "우측 전투 사이클 패널에서 현재 사이클에 포함된 스킬과 백어택·쿨타임 비율을 확인하세요. 전체 비율을 일괄 적용하거나 각 스킬의 값을 개별 수정할 수 있습니다.",
+      image: usageCycleImage,
+      alt: "전투 사이클 구성 패널 화면",
+    },
+    {
+      number: "06",
+      title: "스킬 & 전투 사이클 탭",
+      description:
+        "스킬 & 전투 사이클 탭에서 자동 구성된 사이클과 예상 사이클 시간을 확인하세요. 스킬을 추가하거나 삭제하고, 좌우 이동 버튼으로 사용 순서를 바꿀 수 있습니다. 아래에서는 스킬 레벨·트라이포드·보석과 스킬별 대미지도 조정할 수 있습니다.",
+      image: usageSkillCycleImage,
+      alt: "스킬 및 전투 사이클 탭 화면",
+    },
+    {
+      number: "07",
+      title: "전분 OCR 반영",
+      description:
+        "전투 사이클 스킬을 먼저 구성한 뒤 패널 하단의 전분 스크린샷 불러오기를 누르세요. 공격 정보 표에서 백어택 적중률과 쿨타임 비율이 보이도록 캡처하면 스킬 아이콘을 기준으로 값을 인식합니다. 인식 결과를 확인하고 적용하세요. 절정 222는 전분 쿨타임 비율을 사용하지 않습니다.",
+      image: usageOcrImage,
+      alt: "전분 OCR에 사용할 공격 정보 표 예시",
+    },
+    {
+      number: "08",
+      title: "세팅 저장과 비교",
+      description:
+        "원하는 장비·사이클·비율을 구성했다면 헤더에서 전체 세팅을 저장하세요. 세팅 비교에서 저장된 세팅을 선택하면 예상 DPS, 사이클 시간, 스킬별 딜지분과 주요 지표의 차이를 확인할 수 있습니다.",
+      image: usageComparisonImage,
+      alt: "세팅 비교 화면",
+    },
+  ];
   return (
     <section className="workspace information-workspace">
       <div className="workspace-title">
         <span>05</span>
         <div>
           <h1>사용법</h1>
-          <p>캐릭터를 조회하고 세팅별 예상 DPS를 확인하는 방법입니다.</p>
+          <p>필요한 값만 입력하고 예상 DPS와 세팅 차이를 확인하세요.</p>
         </div>
       </div>
       <div className="usage-guide-grid">
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">01</span>
-          <h2>API 키 설정</h2>
-          <p>
-            API 설정에서 로스트아크 Open API 키를 입력하세요. 원하면 이 브라우저에
-            저장할 수 있으며, 공용 PC에서는 저장하지 않는 것을 권장합니다.
-          </p>
-        </article>
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">02</span>
-          <h2>캐릭터 조회</h2>
-          <p>
-            상단 캐릭터명 입력란에 캐릭터명을 입력하고 검색하세요. 장비, 각인,
-            아크패시브, 스킬과 보석 정보를 불러옵니다.
-          </p>
-        </article>
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">03</span>
-          <h2>세팅 조정</h2>
-          <p>
-            기본 장비 탭에서 장비·악세사리·각인·아크패시브·보석을 확인하고 필요하면
-            직접 수정하세요. 도핑은 좌측 패널에서 선택합니다.
-          </p>
-        </article>
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">04</span>
-          <h2>전투 사이클 구성</h2>
-          <p>
-            스킬 &amp; 전투 사이클 탭에서 자동 사이클을 불러오거나 스킬을 직접
-            추가하세요. 스킬별 백어택·쿨타임 비율을 설정하면 예상 DPS에 반영됩니다.
-          </p>
-        </article>
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">05</span>
-          <h2>전분 스크린샷 반영</h2>
-          <p>
-            우측 전투 사이클 패널 하단의 전분 스크린샷 불러오기를 사용하세요. 인식
-            결과를 확인하고 수정한 뒤 적용할 수 있습니다.
-          </p>
-        </article>
-        <article className="usage-guide-card">
-          <span className="usage-guide-step">06</span>
-          <h2>세팅 저장과 비교</h2>
-          <p>
-            헤더의 현재 세팅 저장으로 전체 스냅샷을 저장하고, 세팅 비교에서 저장된
-            세팅을 선택하면 주요 지표와 스킬별 차이를 확인할 수 있습니다.
-          </p>
-        </article>
+        {guideSteps.map((step) => (
+          <article className="usage-guide-card" key={step.number}>
+            <span className="usage-guide-step">{step.number}</span>
+            <h2>{step.title}</h2>
+            <p>{step.description}</p>
+            <img className="usage-guide-image" src={step.image.src} alt={step.alt} />
+          </article>
+        ))}
       </div>
       <p className="usage-guide-note">
-        예상 DPS는 선택한 전투 사이클 시간과 스킬별 비율을 기준으로 계산됩니다.
-        실제 인게임 결과와는 세팅·상황에 따라 차이가 있을 수 있습니다.
+        예상 DPS는 선택한 전투 사이클 시간과 스킬별 설정을 기준으로 계산됩니다. 실제
+        인게임 결과와는 전투 상황·버프·패턴에 따라 차이가 있을 수 있습니다.
       </p>
     </section>
   );

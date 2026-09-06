@@ -144,6 +144,16 @@
   font-size: 11px;
   line-height: 1.7;
 }
+.usage-guide-image {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  margin: 14px 0 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: #0c1118;
+  object-fit: contain;
+}
 .usage-guide-note {
   max-width: 960px;
   margin: 16px 0 0;
@@ -263,6 +273,21 @@
   background: #172130;
   border: 1px solid #40506a;
   color: #bcd5ff;
+}
+.compact-art-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  line-height: 1;
+  text-align: center;
+}
+.compact-art-empty > span {
+  display: block;
+  line-height: 1;
+  position: relative;
+  top: 7px;
+  text-align: center;
 }
 .compact-art img {
   width: 100%;
