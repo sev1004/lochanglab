@@ -2,6 +2,7 @@
 
 import packageJson from "../../package.json";
 import {
+  type ChangeEvent,
   FormEvent,
   Fragment,
   useEffect,
@@ -104,7 +105,547 @@ import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
 
 const appVersion = packageJson.version;
 
-type MainMenu = "simulation" | "comparison" | "api";
+function formatDamageInEok(value: number, digits = 2) {
+  return `${(value / 100_000_000).toFixed(digits)}억`;
+}
+
+async function preprocessDpsScreenshot(file: File): Promise<Blob> {
+  const bitmap = await createImageBitmap(file);
+  const cropTop = Math.floor(bitmap.height * 0.2);
+  const canvas = document.createElement("canvas");
+  canvas.width = bitmap.width * 2;
+  canvas.height = (bitmap.height - cropTop) * 2;
+  const context = canvas.getContext("2d");
+  if (!context) {
+    bitmap.close();
+    throw new Error("전분 이미지를 처리할 수 없습니다.");
+  }
+  context.filter = "grayscale(1) contrast(175%)";
+  context.drawImage(
+    bitmap,
+    0,
+    cropTop,
+    bitmap.width,
+    bitmap.height - cropTop,
+    0,
+    0,
+    canvas.width,
+    canvas.height,
+  );
+  bitmap.close();
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("전분 이미지 변환에 실패했습니다."))),
+      "image/png",
+    );
+  });
+}
+
+async function canvasToPng(canvas: HTMLCanvasElement): Promise<Blob> {
+  return new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => (blob ? resolve(blob) : reject(new Error("이미지 변환에 실패했습니다."))),
+      "image/png",
+    );
+  });
+}
+
+function imageSignature(
+  source: CanvasImageSource,
+  sourceX: number,
+  sourceY: number,
+  sourceWidth: number,
+  sourceHeight: number,
+) {
+  const size = 24;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const target = canvas.getContext("2d", { willReadFrequently: true });
+  if (!target) return [];
+  target.drawImage(
+    source,
+    sourceX,
+    sourceY,
+    sourceWidth,
+    sourceHeight,
+    0,
+    0,
+    size,
+    size,
+  );
+  const pixels = target.getImageData(0, 0, size, size).data;
+  const channelAverages = [0, 1, 2].map(
+    (channel) =>
+      Array.from({ length: size * size }, (_, index) => pixels[index * 4 + channel])
+        .reduce((total, value) => total + value, 0) /
+      (size * size),
+  );
+  return Array.from({ length: size * size }, (_, index) => {
+    const offset = index * 4;
+    return [
+      pixels[offset] - channelAverages[0],
+      pixels[offset + 1] - channelAverages[1],
+      pixels[offset + 2] - channelAverages[2],
+    ];
+  }).flat();
+}
+
+function signatureDistance(left: readonly number[], right: readonly number[]) {
+  if (!left.length || left.length !== right.length) return Number.POSITIVE_INFINITY;
+  return left.reduce((total, value, index) => total + Math.abs(value - right[index]), 0) / left.length;
+}
+
+function parseDpsScreenshotPercentage(text: string, allowDash = false) {
+  const value = text.match(/\d{1,3}(?:[.,]\d{1,2})?/)?.[0];
+  if (value) {
+    const numeric = Number(value.replace(",", "."));
+    return Number.isFinite(numeric) && numeric >= 0 && numeric <= 100
+      ? numeric
+      : null;
+  }
+  return allowDash && /[-—–]/.test(text) ? 0 : null;
+}
+
+async function extractDpsScreenshotRatiosByIcon(
+  file: File,
+  skills: readonly SkillProfile[],
+): Promise<DpsScreenshotSkillRatio[]> {
+  const eligibleSkills = [
+    ...new Map(
+      skills
+        .filter((skill) => Boolean(skill.icon))
+        .map((skill) => [skill.name, skill]),
+    ).values(),
+  ];
+  if (!eligibleSkills.length) return [];
+  const screenshot = await createImageBitmap(file);
+  const screenshotCanvas = document.createElement("canvas");
+  screenshotCanvas.width = screenshot.width;
+  screenshotCanvas.height = screenshot.height;
+  const screenshotContext = screenshotCanvas.getContext("2d", { willReadFrequently: true });
+  if (!screenshotContext) {
+    screenshot.close();
+    return [];
+  }
+  screenshotContext.drawImage(screenshot, 0, 0);
+
+  try {
+    const templates = await Promise.all(
+      eligibleSkills.map(async (skill) => {
+        const response = await fetch(skill.icon!);
+        if (!response.ok) throw new Error("스킬 아이콘을 가져오지 못했습니다.");
+        const icon = await createImageBitmap(await response.blob());
+        const inset = Math.max(1, Math.round(Math.min(icon.width, icon.height) * 0.08));
+        const signature = imageSignature(
+          icon,
+          inset,
+          inset,
+          icon.width - inset * 2,
+          icon.height - inset * 2,
+        );
+        icon.close();
+        return { skill, signature };
+      }),
+    );
+    const { createWorker, PSM } = await import("tesseract.js");
+    const worker = await createWorker("eng");
+    try {
+      await worker.setParameters({
+        tessedit_char_whitelist: "0123456789.,%-—–",
+        tessedit_pageseg_mode: PSM.SINGLE_WORD,
+      });
+      const iconLeft = Math.round(screenshot.width * 0.011);
+      const iconSize = Math.max(24, Math.round(screenshot.width * 0.027));
+      const baseInset = Math.max(2, Math.round(iconSize * 0.08));
+      let bestGeometry = {
+        firstRowTop: Math.round(screenshot.height * 0.258),
+        rowHeight: Math.max(28, Math.round(screenshot.height * 0.0542)),
+        score: Number.NEGATIVE_INFINITY,
+      };
+      const firstStep = Math.max(2, Math.round(screenshot.height * 0.004));
+      const rowHeightStep = Math.max(1, Math.round(screenshot.height * 0.001));
+      for (
+        let candidateFirst = Math.round(screenshot.height * 0.23);
+        candidateFirst <= Math.round(screenshot.height * 0.29);
+        candidateFirst += firstStep
+      ) {
+        for (
+          let candidateHeight = Math.max(26, Math.round(screenshot.height * 0.049));
+          candidateHeight <= Math.round(screenshot.height * 0.059);
+          candidateHeight += rowHeightStep
+        ) {
+          const rowDistances: number[] = [];
+          const rows = Math.min(
+            16,
+            Math.floor((screenshot.height - candidateFirst) / candidateHeight),
+          );
+          for (let row = 0; row < rows; row += 1) {
+            const signature = imageSignature(
+              screenshotCanvas,
+              iconLeft + baseInset,
+              candidateFirst + row * candidateHeight + baseInset,
+              iconSize - baseInset * 2,
+              iconSize - baseInset * 2,
+            );
+            rowDistances.push(
+              Math.min(
+                ...templates.map((template) =>
+                  signatureDistance(signature, template.signature),
+                ),
+              ),
+            );
+          }
+          const usefulDistances = rowDistances
+            .filter((distance) => distance < 58)
+            .sort((left, right) => left - right)
+            .slice(0, Math.min(eligibleSkills.length, 10));
+          const score = usefulDistances.reduce(
+            (total, distance) => total + (58 - distance),
+            usefulDistances.length * 20,
+          );
+          if (score > bestGeometry.score) {
+            bestGeometry = {
+              firstRowTop: candidateFirst,
+              rowHeight: candidateHeight,
+              score,
+            };
+          }
+        }
+      }
+
+      const maximumRows = Math.min(
+        16,
+        Math.floor(
+          (screenshot.height - bestGeometry.firstRowTop) /
+            bestGeometry.rowHeight,
+        ),
+      );
+      const pairCandidates: Array<{
+        row: number;
+        rowTop: number;
+        skill: SkillProfile;
+        distance: number;
+        ambiguity: number;
+      }> = [];
+      for (let row = 0; row < maximumRows; row += 1) {
+        const expectedTop = bestGeometry.firstRowTop + row * bestGeometry.rowHeight;
+        const distances = templates.map((template) => {
+          let bestDistance = Number.POSITIVE_INFINITY;
+          for (const yOffset of [-3, 0, 3]) {
+            for (const xOffset of [-0.003, 0, 0.003]) {
+              for (const scale of [0.94, 1, 1.06]) {
+                const candidateSize = Math.round(iconSize * scale);
+                const inset = Math.max(2, Math.round(candidateSize * 0.08));
+                const signature = imageSignature(
+                  screenshotCanvas,
+                  iconLeft + Math.round(screenshot.width * xOffset) + inset,
+                  expectedTop + yOffset + inset,
+                  candidateSize - inset * 2,
+                  candidateSize - inset * 2,
+                );
+                bestDistance = Math.min(
+                  bestDistance,
+                  signatureDistance(signature, template.signature),
+                );
+              }
+            }
+          }
+          return { ...template, distance: bestDistance };
+        });
+        const sortedDistances = distances.sort(
+          (left, right) => left.distance - right.distance,
+        );
+        sortedDistances.forEach((candidate) => {
+          pairCandidates.push({
+            row,
+            rowTop: expectedTop,
+            skill: candidate.skill,
+            distance: candidate.distance,
+            ambiguity:
+              (sortedDistances.find(
+                (other) => other.skill.name !== candidate.skill.name,
+              )?.distance ?? Number.POSITIVE_INFINITY) - candidate.distance,
+          });
+        });
+      }
+
+      const usedRows = new Set<number>();
+      const matchedSkillNames = new Set<string>();
+      const matches = pairCandidates
+        .sort((left, right) => left.distance - right.distance)
+        .filter((candidate) => {
+          if (candidate.distance > 52) return false;
+          if (candidate.distance > 28 && candidate.ambiguity < 2.5) return false;
+          if (
+            usedRows.has(candidate.row) ||
+            matchedSkillNames.has(candidate.skill.name)
+          ) {
+            return false;
+          }
+          usedRows.add(candidate.row);
+          matchedSkillNames.add(candidate.skill.name);
+          return true;
+        })
+        .sort((left, right) => left.row - right.row);
+
+      const screenshotPixels = screenshotContext.getImageData(
+        0,
+        0,
+        screenshot.width,
+        screenshot.height,
+      ).data;
+      const luminanceAt = (x: number, y: number) => {
+        const offset = (y * screenshot.width + x) * 4;
+        return (
+          screenshotPixels[offset] * 0.299 +
+          screenshotPixels[offset + 1] * 0.587 +
+          screenshotPixels[offset + 2] * 0.114
+        );
+      };
+      const refineBoundary = (expectedRatio: number) => {
+        const expected = Math.round(screenshot.width * expectedRatio);
+        const radius = Math.max(5, Math.round(screenshot.width * 0.018));
+        let best = expected;
+        let bestScore = Number.NEGATIVE_INFINITY;
+        for (let x = expected - radius; x <= expected + radius; x += 1) {
+          if (x < 3 || x >= screenshot.width - 3) continue;
+          let score = 0;
+          matches.forEach((match) => {
+            const bottom = Math.min(
+              screenshot.height - 1,
+              match.rowTop + bestGeometry.rowHeight - 3,
+            );
+            for (let y = match.rowTop + 3; y <= bottom; y += 3) {
+              const center = luminanceAt(x, y);
+              score += Math.max(
+                Math.abs(center - luminanceAt(x - 2, y)),
+                Math.abs(center - luminanceAt(x + 2, y)),
+              );
+            }
+          });
+          if (score > bestScore) {
+            best = x;
+            bestScore = score;
+          }
+        }
+        return best;
+      };
+      const boundaries = [0.178, 0.293, 0.409, 0.525, 0.641].map(
+        refineBoundary,
+      );
+      const cellPadding = Math.max(4, Math.round(screenshot.width * 0.004));
+
+      const createRatioCell = async (
+        left: number,
+        right: number,
+        rowTop: number,
+        binary: boolean,
+      ) => {
+          const cellCanvas = document.createElement("canvas");
+          const sourceWidth = Math.max(20, right - left);
+          const sourceHeight = Math.max(20, bestGeometry.rowHeight - 8);
+          cellCanvas.width = sourceWidth * 4;
+          cellCanvas.height = sourceHeight * 4;
+          const cellContext = cellCanvas.getContext("2d", {
+            willReadFrequently: binary,
+          });
+          if (!cellContext) return null;
+          cellContext.filter = binary
+            ? "grayscale(1)"
+            : "grayscale(1) contrast(210%)";
+          cellContext.drawImage(
+            screenshotCanvas,
+            left,
+            rowTop + 4,
+            sourceWidth,
+            sourceHeight,
+            0,
+            0,
+            cellCanvas.width,
+            cellCanvas.height,
+          );
+          if (binary) {
+            const image = cellContext.getImageData(
+              0,
+              0,
+              cellCanvas.width,
+              cellCanvas.height,
+            );
+            const grayscale = Array.from(
+              { length: image.data.length / 4 },
+              (_, index) => image.data[index * 4],
+            );
+            const average =
+              grayscale.reduce((total, value) => total + value, 0) /
+              grayscale.length;
+            const threshold = Math.min(190, Math.max(95, average + 28));
+            grayscale.forEach((value, index) => {
+              const output = value >= threshold ? 0 : 255;
+              image.data[index * 4] = output;
+              image.data[index * 4 + 1] = output;
+              image.data[index * 4 + 2] = output;
+              image.data[index * 4 + 3] = 255;
+            });
+            cellContext.putImageData(image, 0, 0);
+          }
+          return canvasToPng(cellCanvas);
+      };
+      const recognizePercentage = async (
+        left: number,
+        right: number,
+        rowTop: number,
+        allowDash = false,
+      ) => {
+        let best: { value: number; confidence: number } | null = null;
+        for (const binary of [false, true]) {
+          const cell = await createRatioCell(left, right, rowTop, binary);
+          if (!cell) continue;
+          const result = await worker.recognize(cell);
+          const value = parseDpsScreenshotPercentage(
+            result.data.text,
+            allowDash,
+          );
+          if (value !== null && (!best || result.data.confidence > best.confidence)) {
+            best = { value, confidence: result.data.confidence };
+          }
+          if (best && best.confidence >= 72) break;
+        }
+        return best?.value ?? null;
+      };
+
+      const ratios: DpsScreenshotSkillRatio[] = [];
+      for (const match of matches) {
+        const backAttackRate = await recognizePercentage(
+          boundaries[2] + cellPadding,
+          boundaries[3] - cellPadding,
+          match.rowTop,
+          true,
+        );
+        const cooldownRate = await recognizePercentage(
+          boundaries[3] + cellPadding,
+          boundaries[4] - cellPadding,
+          match.rowTop,
+        );
+        if (cooldownRate === null || backAttackRate === null) continue;
+        ratios.push({
+          skillName: match.skill.name,
+          cooldownRate,
+          backAttackRate,
+        });
+      }
+      return ratios;
+    } finally {
+      await worker.terminate();
+    }
+  } catch {
+    return [];
+  } finally {
+    screenshot.close();
+  }
+}
+
+type DpsScreenshotSkillRatio = {
+  skillName: string;
+  cooldownRate: number;
+  backAttackRate: number;
+};
+
+function parseDpsScreenshotSkillRatios(
+  recognizedText: string,
+  skillNames: readonly string[],
+): DpsScreenshotSkillRatio[] {
+  const percentagePattern = /(\d{1,3}(?:[.,]\d{1,2})?)\s*%/g;
+  const extractRatios = (rowText: string) => {
+    const matches = [...rowText.matchAll(percentagePattern)];
+    const values = matches
+      .map((match) => Number(match[1].replace(",", ".")))
+      .filter((value) => Number.isFinite(value) && value >= 0 && value <= 100);
+    if (!values.length) return null;
+    const firstMatch = matches[0];
+    const secondMatch = matches[1];
+    const beforeFirstPercentage = rowText.slice(0, firstMatch.index ?? 0);
+    const backAttackMissing = /[-—–]/.test(beforeFirstPercentage);
+    if (!backAttackMissing && values.length < 2) return null;
+    return {
+      cooldownRate: backAttackMissing ? values[0] : values[1],
+      backAttackRate: backAttackMissing ? 0 : values[0],
+    };
+  };
+  const namePattern = (skillName: string) =>
+    new RegExp(skillName.split("").join("\\s*"), "g");
+  const skillLocations = skillNames.flatMap((skillName) =>
+    [...recognizedText.matchAll(namePattern(skillName))].map((match) => ({
+      skillName,
+      index: match.index ?? -1,
+    })),
+  );
+
+  const exactMatches = skillNames.flatMap((skillName) => {
+    const currentLocation = skillLocations.find(
+      (location) => location.skillName === skillName,
+    );
+    if (!currentLocation || currentLocation.index < 0) return [];
+    const nextLocation = skillLocations
+      .filter((location) => location.index > currentLocation.index)
+      .sort((left, right) => left.index - right.index)[0];
+    const rowText = recognizedText.slice(
+      currentLocation.index + skillName.length,
+      nextLocation?.index ?? currentLocation.index + 320,
+    );
+    const ratios = extractRatios(rowText);
+    if (!ratios) return [];
+    return [
+      {
+        skillName,
+        ...ratios,
+      },
+    ];
+  });
+  const matchedNames = new Set(exactMatches.map((ratio) => ratio.skillName));
+  const distance = (left: string, right: string) => {
+    const rows = Array.from({ length: left.length + 1 }, (_, index) => index);
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      let diagonal = rows[0];
+      rows[0] = rightIndex;
+      for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+        const previous = rows[leftIndex];
+        rows[leftIndex] = Math.min(
+          rows[leftIndex] + 1,
+          rows[leftIndex - 1] + 1,
+          diagonal + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+        );
+        diagonal = previous;
+      }
+    }
+    return rows[left.length];
+  };
+  const fuzzyMatches = recognizedText.split(/\r?\n/).flatMap((line) => {
+    const ratios = extractRatios(line);
+    const candidate = line
+      .split(/\d/)[0]
+      .replace(/[^가-힣]/g, "");
+    if (candidate.length < 2 || !ratios) return [];
+    const closest = skillNames
+      .filter((skillName) => !matchedNames.has(skillName))
+      .map((skillName) => ({ skillName, distance: distance(candidate, skillName) }))
+      .sort((left, right) => left.distance - right.distance)[0];
+    if (!closest || closest.distance > Math.max(1, Math.floor(closest.skillName.length * 0.35))) {
+      return [];
+    }
+    return [{
+      skillName: closest.skillName,
+      ...ratios,
+    }];
+  });
+  const ratiosBySkillName = new Map(
+    fuzzyMatches.map((ratio) => [ratio.skillName, ratio]),
+  );
+  exactMatches.forEach((ratio) => ratiosBySkillName.set(ratio.skillName, ratio));
+  return [...ratiosBySkillName.values()];
+}
+
+type MainMenu = "simulation" | "api" | "notice" | "guide";
 type SimulationTab = "기본 장비" | "스킬 & 전투 사이클";
 type CycleEntry = {
   id: string;
@@ -126,6 +667,51 @@ type CycleSkillRatioSettings = Record<
     cooldownRate: string;
   }
 >;
+type SavedSettingComparisonSummary = {
+  classLabel: string;
+  coreLabel: string | null;
+  expectedDps: number | null;
+  cycleSeconds: number;
+  skills: Array<{
+    skillName: string;
+    damageShare: number;
+    averageDamage: number;
+    usesPerMinute: number;
+  }>;
+  finalAttackPower: number;
+  baseCriticalRate: number;
+  attackSpeedPercent: number;
+  moveSpeedPercent: number;
+  criticalDamagePercent: number;
+  braceletEfficiency: number | null;
+  averageBackAttackRate: number;
+  averageCooldownRate: number;
+};
+type SavedSettingSnapshot = {
+  character: CharacterProfile;
+  gems: GemProfile[];
+  stoneEffects: StoneEffect[];
+  avatarGrades: Record<string, string>;
+  visibleSkillIds: string[];
+  cycle: CycleEntry[];
+  cyclePresetId: string;
+  cycleDurationMode: CycleDurationMode;
+  manualCycleSeconds: string;
+  cycleSkillRatioSettings: CycleSkillRatioSettings;
+  allCycleBackAttack: boolean;
+  allCycleCooldown: boolean;
+  allCycleBackAttackRate: string;
+  allCycleCooldownRate: string;
+  supportRageBuff: boolean;
+  banquetBuff: boolean;
+  blessingFood: boolean;
+  wineFood: boolean;
+  azenaBuff: boolean;
+  vulnerableAttribute: boolean;
+  criticalRateSynergyEnabled: boolean;
+  criticalRateSynergyValue: string;
+  comparisonSummary?: SavedSettingComparisonSummary;
+};
 type SavedSetting = {
   id: string;
   name: string;
@@ -133,6 +719,7 @@ type SavedSetting = {
   itemLevel: string;
   attackPower: string;
   savedAt: string;
+  snapshot?: SavedSettingSnapshot;
 };
 type StoneEffect = { engraving: string; level: number };
 type BraceletPrimaryStat = (typeof BRACELET_PRIMARY_STAT_TYPES)[number];
@@ -613,6 +1200,43 @@ const errors: Record<number, string> = {
   429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
 };
 const simTabs: SimulationTab[] = ["기본 장비", "스킬 & 전투 사이클"];
+const siteNotices = [
+  {
+    version: "v0.1.1",
+    date: "2026.09.06",
+    title: "전투 분석 및 편의 기능 업데이트",
+    items: [
+      "전투 분석기 스크린샷에서 스킬 아이콘을 기준으로 스킬을 매칭하고, 백어택 적중률과 쿨타임 비율을 전투 사이클에 반영합니다.",
+      "이때 절정 222 연격 세팅은 쿨타임 비율이 적용되지 않습니다. (DPS 계산 방식 개선 건의 받습니다.)",
+      "저장한 전체 세팅을 불러오고 현재 세팅과 비교할 수 있는 기능이 추가되었습니다.",
+      "스킬별 최대 대미지·평균 대미지·딜지분과 사이클 시간을 확인할 수 있습니다.",
+      "자잘한 UI 개선이 진행되었습니다.",
+    ],
+  },
+  {
+    version: "v0.1.0",
+    date: "2026.09.06",
+    title: "서비스 출시일",
+    items: [
+      "로스트아크 창술사의 장비, 각인, 아크패시브, 보석, 도핑 설정을 바탕으로 전투 스킬 대미지와 예상 DPS를 계산하는 웹 서비스입니다.",
+      "캐릭터 API 정보를 불러온 뒤 전투 사이클과 스킬별 조건을 조정해 세팅을 검증할 수 있습니다.",
+    ],
+  },
+];
+const sortedSiteNotices = [...siteNotices].sort((left, right) => {
+  const versionNumber = (version: string) =>
+    version
+      .replace(/^v/, "")
+      .split(".")
+      .map((part) => Number(part) || 0);
+  const leftParts = versionNumber(left.version);
+  const rightParts = versionNumber(right.version);
+  for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index += 1) {
+    const difference = (rightParts[index] ?? 0) - (leftParts[index] ?? 0);
+    if (difference !== 0) return difference;
+  }
+  return 0;
+});
 const SAVED_SETTINGS_KEY = "glavier-dps-simulator:saved-settings";
 const API_KEY_STORAGE_KEY = "glavier-dps-simulator:lostark-api-key";
 const gearGrades = ["결단", "전율"] as const;
@@ -980,7 +1604,6 @@ function GearEditor({
         ) : null}
       </div>
       <div className={`gear-fields${isArmGauntlet ? " no-quality" : ""}`}>
-        {!isArmGauntlet ? <small>{item.itemLevel ?? "-"}</small> : null}
         <select
           aria-label={`${item.slot} 장비 종류`}
           value={
@@ -1344,7 +1967,7 @@ function StoneEditor({
   return (
     <article className="stone-editor">
       <Artwork icon={icon} label="◇" />
-      <div>
+      <div className="stone-card-content">
         {effects.map((effect, index) => (
           <div className="stone-row" key={index}>
             <select
@@ -1845,19 +2468,21 @@ function SkillEditorV2({
           <span>
             최대 대미지{" "}
             <b>
-              {Math.floor(
+              {formatDamageInEok(
                 backAttackDisplayScenario?.maximumDamage ??
                   calculation.maximumCriticalDamage,
-              ).toLocaleString()}
+                3,
+              )}
             </b>
           </span>
           <span>
             평균 대미지{" "}
             <b>
-              {Math.floor(
+              {formatDamageInEok(
                 backAttackDisplayScenario?.averageDamage ??
                   calculation.expectedDamage,
-              ).toLocaleString()}
+                3,
+              )}
             </b>
           </span>
         </div>
@@ -2766,7 +3391,7 @@ function InternalGearSnapshotDebug({
   return (
     <details className="internal-gear-debug">
       <summary>
-        내부 장비 스냅샷 ·{" "}
+        값 검증 모드 ·{" "}
         {snapshot.internalGearSnapshot.unresolvedSlots.length
           ? `${snapshot.internalGearSnapshot.unresolvedSlots.length}개 미등록`
           : "검증 완료"}
@@ -2984,12 +3609,112 @@ function InternalGearSnapshotDebug({
   );
 }
 
+function NoticePage() {
+  return (
+    <section className="workspace information-workspace">
+      <div className="workspace-title">
+        <span>04</span>
+        <div>
+          <h1>공지사항</h1>
+          <p>서비스 공지와 업데이트 내역을 확인할 수 있습니다.</p>
+        </div>
+      </div>
+      <div className="notice-list">
+        {sortedSiteNotices.map((notice) => (
+          <article className="notice-card" key={`${notice.date}-${notice.title}`}>
+            <div className="notice-card-heading">
+              <div className="notice-version-title">
+                <span className="notice-version">{notice.version}</span>
+                <h2>{notice.title}</h2>
+              </div>
+              <time>{notice.date}</time>
+            </div>
+            <ul>
+              {notice.items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function UsagePage() {
+  return (
+    <section className="workspace information-workspace">
+      <div className="workspace-title">
+        <span>05</span>
+        <div>
+          <h1>사용법</h1>
+          <p>캐릭터를 조회하고 세팅별 예상 DPS를 확인하는 방법입니다.</p>
+        </div>
+      </div>
+      <div className="usage-guide-grid">
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">01</span>
+          <h2>API 키 설정</h2>
+          <p>
+            API 설정에서 로스트아크 Open API 키를 입력하세요. 원하면 이 브라우저에
+            저장할 수 있으며, 공용 PC에서는 저장하지 않는 것을 권장합니다.
+          </p>
+        </article>
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">02</span>
+          <h2>캐릭터 조회</h2>
+          <p>
+            상단 캐릭터명 입력란에 캐릭터명을 입력하고 검색하세요. 장비, 각인,
+            아크패시브, 스킬과 보석 정보를 불러옵니다.
+          </p>
+        </article>
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">03</span>
+          <h2>세팅 조정</h2>
+          <p>
+            기본 장비 탭에서 장비·악세사리·각인·아크패시브·보석을 확인하고 필요하면
+            직접 수정하세요. 도핑은 좌측 패널에서 선택합니다.
+          </p>
+        </article>
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">04</span>
+          <h2>전투 사이클 구성</h2>
+          <p>
+            스킬 &amp; 전투 사이클 탭에서 자동 사이클을 불러오거나 스킬을 직접
+            추가하세요. 스킬별 백어택·쿨타임 비율을 설정하면 예상 DPS에 반영됩니다.
+          </p>
+        </article>
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">05</span>
+          <h2>전분 스크린샷 반영</h2>
+          <p>
+            우측 전투 사이클 패널 하단의 전분 스크린샷 불러오기를 사용하세요. 인식
+            결과를 확인하고 수정한 뒤 적용할 수 있습니다.
+          </p>
+        </article>
+        <article className="usage-guide-card">
+          <span className="usage-guide-step">06</span>
+          <h2>세팅 저장과 비교</h2>
+          <p>
+            헤더의 현재 세팅 저장으로 전체 스냅샷을 저장하고, 세팅 비교에서 저장된
+            세팅을 선택하면 주요 지표와 스킬별 차이를 확인할 수 있습니다.
+          </p>
+        </article>
+      </div>
+      <p className="usage-guide-note">
+        예상 DPS는 선택한 전투 사이클 시간과 스킬별 비율을 기준으로 계산됩니다.
+        실제 인게임 결과와는 세팅·상황에 따라 차이가 있을 수 있습니다.
+      </p>
+    </section>
+  );
+}
+
 export default function Home() {
-  const [supportRageBuff, setSupportRageBuff] = useState(false);
-  const [banquetBuff, setBanquetBuff] = useState(false);
+  const [supportRageBuff, setSupportRageBuff] = useState(true);
+  const [banquetBuff, setBanquetBuff] = useState(true);
   const [blessingFood, setBlessingFood] = useState(false);
   const [wineFood, setWineFood] = useState(false);
-  const [azenaBuff, setAzenaBuff] = useState(false);
+  const [azenaBuff, setAzenaBuff] = useState(true);
   const [vulnerableAttribute, setVulnerableAttribute] = useState(false);
   const [criticalRateSynergyEnabled, setCriticalRateSynergyEnabled] =
     useState(false);
@@ -3011,6 +3736,12 @@ export default function Home() {
   const [cyclePresetId, setCyclePresetId] = useState("");
   const automaticCycleKeyRef = useRef<string | null>(null);
   const manualCycleEditRef = useRef(false);
+  const restoreSavedCycleRef = useRef(false);
+  const dpsScreenshotInputRef = useRef<HTMLInputElement>(null);
+  const [dpsScreenshotStatus, setDpsScreenshotStatus] = useState("");
+  const [dpsScreenshotPreview, setDpsScreenshotPreview] = useState<
+    DpsScreenshotSkillRatio[] | null
+  >(null);
   const [cycleSkillRatioSettings, setCycleSkillRatioSettings] =
     useState<CycleSkillRatioSettings>({});
   const [allCycleBackAttack, setAllCycleBackAttack] = useState(true);
@@ -3026,6 +3757,10 @@ export default function Home() {
   const [skillToAdd, setSkillToAdd] = useState("");
   const [visibleSkillIds, setVisibleSkillIds] = useState<string[]>([]);
   const [savedSettings, setSavedSettings] = useState<SavedSetting[]>([]);
+  const [comparisonSettingId, setComparisonSettingId] = useState("");
+  const [saveDialogOpen, setSaveDialogOpen] = useState(false);
+  const [saveSettingName, setSaveSettingName] = useState("");
+  const [saveOverwriteId, setSaveOverwriteId] = useState("");
   const [gems, setGems] = useState<GemProfile[]>([]);
   const [gemMessage, setGemMessage] = useState("");
   const [stoneEffects, setStoneEffects] = useState<StoneEffect[]>([]);
@@ -3193,6 +3928,8 @@ export default function Home() {
   const arkGridShorthand = character
     ? deriveGridShorthand(character.arkGrid.cores, classEngraving)
     : null;
+  const excludesScreenshotCooldownRatio =
+    classEngraving === "절정" && arkGridShorthand === "222";
   const visibleSkills =
     character?.skills.filter((skill) => visibleSkillIds.includes(skill.id)) ??
     [];
@@ -3416,6 +4153,11 @@ export default function Home() {
   );
   useEffect(() => {
     if (!character || !unifiedSimulation) return;
+    if (restoreSavedCycleRef.current) {
+      restoreSavedCycleRef.current = false;
+      automaticCycleKeyRef.current = automaticCycleKey;
+      return;
+    }
     const preset = cyclePresets[0] ?? null;
     if (automaticCycleKeyRef.current === automaticCycleKey) {
       return;
@@ -3545,6 +4287,81 @@ export default function Home() {
     braceletFreeExpectedDps > 0
       ? (expectedDps / braceletFreeExpectedDps - 1) * 100
       : null;
+  const cycleTotalDamage = cycleDamageRows.reduce(
+    (total, row) => total + row.totalDamage,
+    0,
+  );
+  const cycleRatioFor = (
+    skillName: string,
+    key: "backAttackRate" | "cooldownRate",
+  ) => {
+    const isGlobal =
+      key === "backAttackRate" ? allCycleBackAttack : allCycleCooldown;
+    const globalValue =
+      key === "backAttackRate"
+        ? allCycleBackAttackRate
+        : allCycleCooldownRate;
+    const configuredValue = cycleSkillRatioSettings[skillName]?.[key] ?? "0";
+    const numericValue = Number(isGlobal ? globalValue : configuredValue);
+    return Math.min(100, Math.max(0, Number.isFinite(numericValue) ? numericValue : 0));
+  };
+  const weightedCycleRatio = (key: "backAttackRate" | "cooldownRate") =>
+    cycleTotalDamage > 0
+      ? cycleDamageRows.reduce(
+          (total, row) =>
+            total +
+            (row.totalDamage / cycleTotalDamage) * cycleRatioFor(row.skillName, key),
+          0,
+        )
+      : 0;
+  const currentComparisonSummary: SavedSettingComparisonSummary | null =
+    character && sharedCombatSnapshot
+      ? {
+          classLabel: classEngraving ?? character.className,
+          coreLabel: arkGridShorthand,
+          expectedDps,
+          cycleSeconds,
+          skills:
+            cycleTotalDamage > 0
+              ? cycleDamageRows
+                  .map((row) => ({
+                    skillName: row.skillName,
+                    damageShare: (row.totalDamage / cycleTotalDamage) * 100,
+                    averageDamage: row.averageDamage,
+                    usesPerMinute:
+                      cycleSeconds > 0 ? (row.count * 60) / cycleSeconds : 0,
+                  }))
+                  .sort((a, b) => b.damageShare - a.damageShare)
+              : [],
+          finalAttackPower: sharedCombatSnapshot.finalAttackPower,
+          baseCriticalRate:
+            sharedCombatSnapshot.criticalRateSnapshot.total * 100,
+          attackSpeedPercent: sharedCombatSnapshot.attackSpeedPercent,
+          moveSpeedPercent: sharedCombatSnapshot.moveSpeedPercent,
+          criticalDamagePercent:
+            sharedCombatSnapshot.criticalDamageMultiplier * 100,
+          braceletEfficiency,
+          averageBackAttackRate: weightedCycleRatio("backAttackRate"),
+          averageCooldownRate: weightedCycleRatio("cooldownRate"),
+        }
+      : null;
+  const comparisonSetting = savedSettings.find(
+    (setting) => setting.id === comparisonSettingId && setting.snapshot,
+  );
+  const comparisonTargetSummary = comparisonSetting?.snapshot?.comparisonSummary;
+  const comparisonDelta = (current: number, target: number) => {
+    if (!target || current === target) return null;
+    const delta = (current / target - 1) * 100;
+    return Math.abs(Number(delta.toFixed(2))) === 0 ? null : delta.toFixed(2);
+  };
+  const comparisonDifference = (
+    current: number,
+    target: number,
+    suffix: string,
+  ) => {
+    const difference = current - target;
+    return `${difference >= 0 ? "+" : ""}${difference.toFixed(2)}${suffix}`;
+  };
   function exportDebugJson() {
     if (!character || !sharedCombatSnapshot) return;
     const exportPayload = {
@@ -3681,6 +4498,105 @@ export default function Home() {
         [key]: String(clampedValue),
       },
     }));
+  }
+  async function applyDpsScreenshot(file: File) {
+    if (!cycleSkillCards.length) {
+      setDpsScreenshotStatus("전분을 반영할 전투 사이클 스킬을 먼저 구성해주세요.");
+      return;
+    }
+
+    setDpsScreenshotStatus("전분 스크린샷을 분석하는 중...");
+    try {
+      const screenshotRatioSkills = cycleSkillCards.filter(
+        (skill) => skill.name !== "청룡진",
+      );
+      const iconRatios = await extractDpsScreenshotRatiosByIcon(
+        file,
+        screenshotRatioSkills,
+      );
+      const { createWorker } = await import("tesseract.js");
+      const worker = await createWorker("kor+eng");
+      let textRatios: DpsScreenshotSkillRatio[] = [];
+      try {
+        const preparedImage = await preprocessDpsScreenshot(file);
+        const originalResult = await worker.recognize(file);
+        const preparedResult = await worker.recognize(preparedImage);
+        const originalRatios = parseDpsScreenshotSkillRatios(
+          originalResult.data.text,
+          screenshotRatioSkills.map((skill) => skill.name),
+        );
+        const preparedRatios = parseDpsScreenshotSkillRatios(
+          preparedResult.data.text,
+          screenshotRatioSkills.map((skill) => skill.name),
+        );
+        textRatios = [
+          ...new Map(
+            [...preparedRatios, ...originalRatios].map((ratio) => [
+              ratio.skillName,
+              ratio,
+            ]),
+          ).values(),
+        ];
+      } finally {
+        await worker.terminate();
+      }
+      const ratios = [
+        ...new Map(
+          [...textRatios, ...iconRatios].map((ratio) => [
+            ratio.skillName,
+            ratio,
+          ]),
+        ).values(),
+      ];
+      if (!ratios.length) {
+        setDpsScreenshotStatus(
+          "스킬 아이콘과 비율을 찾지 못했습니다. 공격 정보 탭 전체가 보이는 전분 스크린샷을 사용해주세요.",
+        );
+        return;
+      }
+
+      setDpsScreenshotPreview(ratios);
+      setDpsScreenshotStatus(
+        `${ratios.length}개 스킬을 인식했습니다. 값을 확인한 뒤 적용해주세요.`,
+      );
+    } catch {
+      setDpsScreenshotStatus(
+        "전분 스크린샷을 분석하지 못했습니다. 네트워크 연결과 이미지 상태를 확인해주세요.",
+      );
+    }
+  }
+  async function importDpsScreenshot(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    await applyDpsScreenshot(file);
+  }
+  function confirmDpsScreenshotPreview() {
+    if (!dpsScreenshotPreview?.length) return;
+    setAllCycleBackAttack(false);
+    if (!excludesScreenshotCooldownRatio) {
+      setAllCycleCooldown(false);
+    }
+    setCycleSkillRatioSettings((current) => {
+      const next = { ...current };
+      dpsScreenshotPreview.forEach((ratio) => {
+        const currentRatio = current[ratio.skillName];
+        next[ratio.skillName] = {
+          backAttackRate: ratio.backAttackRate.toFixed(2),
+          cooldownRate: excludesScreenshotCooldownRatio
+            ? (currentRatio?.cooldownRate ??
+              (allCycleCooldown ? allCycleCooldownRate : "0"))
+            : ratio.cooldownRate.toFixed(2),
+        };
+      });
+      return next;
+    });
+    setDpsScreenshotStatus(
+      excludesScreenshotCooldownRatio
+        ? `${dpsScreenshotPreview.length}개 스킬의 백어택 비율을 반영했습니다. 절정 222는 쿨타임 비율을 제외합니다.`
+        : `${dpsScreenshotPreview.length}개 스킬의 전분 비율을 반영했습니다.`,
+    );
+    setDpsScreenshotPreview(null);
   }
   function toggleApiKeyRemember(checked: boolean) {
     if (checked && !apiKey.trim()) {
@@ -3900,25 +4816,158 @@ export default function Home() {
     );
     setSkillToAdd("");
   }
-  function saveSetting() {
+  function openSaveSettingDialog() {
     if (!character) return;
-    setSavedSettings((value) => {
-      const next = [
-        ...value,
-        {
-          id: crypto.randomUUID(),
-          name: `${character.name} 세팅 ${value.length + 1}`,
-          cycle: cycle.map((entry) => entry.skillName),
-          itemLevel: character.level,
-          attackPower:
-            sharedCombatSnapshot?.finalAttackPowerSnapshot.total.toFixed(2) ??
-            "0",
-          savedAt: new Date().toLocaleString("ko-KR"),
-        },
-      ];
+    setSaveSettingName(`${character.name} 세팅 ${savedSettings.length + 1}`);
+    setSaveOverwriteId("");
+    setSaveDialogOpen(true);
+  }
+  function toggleAllCycleRatio(
+    key: "backAttackRate" | "cooldownRate",
+    checked: boolean,
+  ) {
+    if (!checked) {
+      const globalValue =
+        key === "backAttackRate"
+          ? allCycleBackAttackRate
+          : allCycleCooldownRate;
+      setCycleSkillRatioSettings((current) => {
+        const next = { ...current };
+        cycleSkillCards.forEach((skill) => {
+          const existing = next[skill.name];
+          next[skill.name] = {
+            backAttackRate: existing?.backAttackRate ?? "0",
+            cooldownRate: existing?.cooldownRate ?? "0",
+            [key]: globalValue,
+          };
+        });
+        return next;
+      });
+    }
+    if (key === "backAttackRate") {
+      setAllCycleBackAttack(checked);
+      return;
+    }
+    setAllCycleCooldown(checked);
+  }
+
+  function currentSettingSnapshot(): SavedSettingSnapshot | null {
+    if (!character) return null;
+    return JSON.parse(
+      JSON.stringify({
+        character,
+        gems,
+        stoneEffects,
+        avatarGrades,
+        visibleSkillIds,
+        cycle,
+        cyclePresetId,
+        cycleDurationMode,
+        manualCycleSeconds,
+        cycleSkillRatioSettings,
+        allCycleBackAttack,
+        allCycleCooldown,
+        allCycleBackAttackRate,
+        allCycleCooldownRate,
+        supportRageBuff,
+        banquetBuff,
+        blessingFood,
+        wineFood,
+        azenaBuff,
+        vulnerableAttribute,
+        criticalRateSynergyEnabled,
+        criticalRateSynergyValue,
+        comparisonSummary: currentComparisonSummary ?? undefined,
+      }),
+    ) as SavedSettingSnapshot;
+  }
+
+  function saveCurrentSetting() {
+    const snapshot = currentSettingSnapshot();
+    if (!character || !snapshot) return;
+    const name = saveSettingName.trim() || `${character.name} 세팅`;
+    const savedAt = new Date().toLocaleString("ko-KR");
+    const isOverwriting = Boolean(saveOverwriteId);
+    setSavedSettings((current) => {
+      const overwrite = current.find((setting) => setting.id === saveOverwriteId);
+      const setting: SavedSetting = {
+        id: overwrite?.id ?? crypto.randomUUID(),
+        name,
+        cycle: cycle.map((entry) => entry.skillName),
+        itemLevel: character.level,
+        attackPower:
+          sharedCombatSnapshot?.finalAttackPowerSnapshot.total.toFixed(2) ??
+          "0",
+        savedAt,
+        snapshot,
+      };
+      const next = overwrite
+        ? current.map((candidate) =>
+            candidate.id === overwrite.id ? setting : candidate,
+          )
+        : [...current, setting];
       localStorage.setItem(SAVED_SETTINGS_KEY, JSON.stringify(next));
       return next;
     });
+    setSaveDialogOpen(false);
+    setMessage(`'${name}' 세팅을 ${isOverwriting ? "덮어써서" : "새로"} 저장했습니다.`);
+  }
+
+  function deleteSavedSetting(id: string) {
+    const setting = savedSettings.find((candidate) => candidate.id === id);
+    if (!setting) return;
+    if (!window.confirm(`'${setting.name}' 세팅을 삭제할까요?`)) return;
+    const next = savedSettings.filter((candidate) => candidate.id !== id);
+    setSavedSettings(next);
+    localStorage.setItem(SAVED_SETTINGS_KEY, JSON.stringify(next));
+    if (comparisonSettingId === id) setComparisonSettingId("");
+    if (saveOverwriteId === id) {
+      setSaveOverwriteId("");
+      setSaveSettingName("");
+    }
+    setMessage(`'${setting.name}' 세팅을 삭제했습니다.`);
+  }
+
+  function loadSavedSetting(id: string) {
+    const setting = savedSettings.find((candidate) => candidate.id === id);
+    if (!setting?.snapshot) {
+      setMessage("이전 형식으로 저장된 세팅입니다. 현재 세팅을 다시 저장해주세요.");
+      return;
+    }
+    if (!window.confirm(`'${setting.name}' 세팅을 불러올까요? 현재 편집 내용은 덮어씁니다.`)) {
+      return;
+    }
+    const snapshot = JSON.parse(
+      JSON.stringify(setting.snapshot),
+    ) as SavedSettingSnapshot;
+    restoreSavedCycleRef.current = true;
+    manualCycleEditRef.current = true;
+    setCharacter(snapshot.character);
+    setCharacterName(snapshot.character.name);
+    setGems(snapshot.gems);
+    setStoneEffects(snapshot.stoneEffects);
+    setAvatarGrades(snapshot.avatarGrades);
+    setVisibleSkillIds(snapshot.visibleSkillIds);
+    setCycle(snapshot.cycle);
+    setCyclePresetId(snapshot.cyclePresetId);
+    setCycleDurationMode(snapshot.cycleDurationMode);
+    setManualCycleSeconds(snapshot.manualCycleSeconds);
+    setCycleSkillRatioSettings(snapshot.cycleSkillRatioSettings);
+    setAllCycleBackAttack(snapshot.allCycleBackAttack);
+    setAllCycleCooldown(snapshot.allCycleCooldown);
+    setAllCycleBackAttackRate(snapshot.allCycleBackAttackRate);
+    setAllCycleCooldownRate(snapshot.allCycleCooldownRate);
+    setSupportRageBuff(snapshot.supportRageBuff);
+    setBanquetBuff(snapshot.banquetBuff);
+    setBlessingFood(snapshot.blessingFood);
+    setWineFood(snapshot.wineFood);
+    setAzenaBuff(snapshot.azenaBuff);
+    setVulnerableAttribute(snapshot.vulnerableAttribute);
+    setCriticalRateSynergyEnabled(snapshot.criticalRateSynergyEnabled);
+    setCriticalRateSynergyValue(snapshot.criticalRateSynergyValue);
+    setTab("기본 장비");
+    setMenu("simulation");
+    setMessage(`'${setting.name}' 세팅을 불러왔습니다.`);
   }
 
   return (
@@ -3934,8 +4983,9 @@ export default function Home() {
         <nav className="main-menu">
           {[
             ["simulation", "시뮬레이션"],
-            ["comparison", "세팅 비교"],
             ["api", "API 설정"],
+            ["notice", "공지사항"],
+            ["guide", "사용법"],
           ].map(([id, label]) => (
             <button
               type="button"
@@ -3962,7 +5012,11 @@ export default function Home() {
           </div>
         </nav>
       </header>
-      {menu === "api" ? (
+      {menu === "notice" ? (
+        <NoticePage />
+      ) : menu === "guide" ? (
+        <UsagePage />
+      ) : menu === "api" ? (
         <section className="workspace api-workspace">
           <div className="workspace-title">
             <span>03</span>
@@ -4020,40 +5074,6 @@ export default function Home() {
           >
             로스트아크 Open API 키 발급 가이드 ↗
           </a>
-        </section>
-      ) : null}
-      {menu === "comparison" ? (
-        <section className="workspace">
-          <div className="workspace-title">
-            <span>02</span>
-            <div>
-              <h1>세팅 비교</h1>
-              <p>
-                시뮬레이션에서 저장한 세팅의 전투 사이클과 계산 결과를
-                비교합니다.
-              </p>
-            </div>
-          </div>
-          {savedSettings.length ? (
-            <div className="setting-compare">
-              {savedSettings.map((setting) => (
-                <article key={setting.id}>
-                  <strong>{setting.name}</strong>
-                  <p>
-                    아이템 레벨 {setting.itemLevel} · 공격력{" "}
-                    {setting.attackPower}
-                  </p>
-                  <small>
-                    {setting.cycle.length
-                      ? setting.cycle.join(" → ")
-                      : "전투 사이클 미설정"}
-                  </small>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <p className="empty-copy">저장된 세팅이 없습니다.</p>
-          )}
         </section>
       ) : null}
       {menu === "simulation" ? (
@@ -4139,12 +5159,284 @@ export default function Home() {
                   </div>
                 </div>
                 <div className="profile-actions">
-                  <strong>아이템 레벨 {character.level}</strong>
-                  <button type="button" onClick={saveSetting}>
+                  {savedSettings.some((setting) => setting.snapshot) ? (
+                    <label className="saved-setting-load-control">
+                      <select
+                        aria-label="저장 세팅 불러오기"
+                        defaultValue=""
+                        onChange={(event) => {
+                          if (event.target.value) {
+                            loadSavedSetting(event.target.value);
+                            event.target.value = "";
+                          }
+                        }}
+                      >
+                        <option value="">세팅 불러오기</option>
+                        {savedSettings
+                          .filter((setting) => setting.snapshot)
+                          .map((setting) => (
+                            <option value={setting.id} key={setting.id}>
+                              {setting.name}
+                            </option>
+                          ))}
+                      </select>
+                    </label>
+                  ) : null}
+                  <button
+                    type="button"
+                    className="profile-save-setting-button"
+                    onClick={openSaveSettingDialog}
+                  >
                     현재 세팅 저장
                   </button>
+                  {savedSettings.length ? (
+                    <details className="saved-setting-management">
+                      <summary>세팅 관리</summary>
+                      <div className="saved-setting-management-list">
+                        {savedSettings.map((setting) => (
+                          <div className="saved-setting-delete-row" key={setting.id}>
+                            <span title={setting.name}>{setting.name}</span>
+                            <button
+                              type="button"
+                              onClick={() => deleteSavedSetting(setting.id)}
+                            >
+                              삭제
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
               </div>
+              <section className="profile-setting-comparison" aria-label="세팅 비교">
+                <div className="profile-setting-comparison-heading">
+                  <strong>세팅 비교</strong>
+                  <label>
+                    <span>비교 세팅 선택</span>
+                    <select
+                      aria-label="비교 세팅 선택"
+                      value={comparisonSettingId}
+                      onChange={(event) =>
+                        setComparisonSettingId(event.target.value)
+                      }
+                    >
+                      <option value="">세팅 불러오기</option>
+                      {savedSettings
+                        .filter((setting) => setting.snapshot)
+                        .map((setting) => (
+                          <option value={setting.id} key={setting.id}>
+                            {setting.name}
+                          </option>
+                        ))}
+                    </select>
+                  </label>
+                </div>
+                {comparisonSetting && comparisonTargetSummary && currentComparisonSummary ? (
+                  <div className="profile-setting-comparison-body">
+                    <span className="comparison-setting-name">
+                      현재 세팅 ↔ {comparisonSetting.name}
+                    </span>
+                    <div className="comparison-basic-info">
+                      <span>
+                        직업 · 코어
+                        <b>
+                          {currentComparisonSummary.classLabel} {currentComparisonSummary.coreLabel ?? ""}
+                          <small className="comparison-inline-target">
+                            (B군·{comparisonTargetSummary.classLabel} {comparisonTargetSummary.coreLabel ?? ""})
+                          </small>
+                        </b>
+                      </span>
+                      {[
+                        ["예상 DPS", currentComparisonSummary.expectedDps, comparisonTargetSummary.expectedDps, "", "percent"],
+                        ["사이클 시간", currentComparisonSummary.cycleSeconds, comparisonTargetSummary.cycleSeconds, "초", "difference"],
+                      ].map(([label, current, target, suffix, changeType]) => {
+                        const numericCurrent = typeof current === "number" ? current : 0;
+                        const numericTarget = typeof target === "number" ? target : 0;
+                        const delta = comparisonDelta(numericCurrent, numericTarget);
+                        return (
+                          <span key={String(label)}>
+                            {label}
+                            <b>
+                              {current === null ? "계산 준비 중" : `${label === "예상 DPS" ? formatDamageInEok(numericCurrent, 3) : numericCurrent.toFixed(2)}${String(suffix)}`}
+                              <small className="comparison-inline-target">
+                                (B군·{target === null ? "계산 준비 중" : `${label === "예상 DPS" ? formatDamageInEok(numericTarget, 3) : numericTarget.toFixed(2)}${String(suffix)}`})
+                              </small>
+                            </b>
+                            {changeType === "difference" ? (
+                              <em className="difference">
+                                {comparisonDifference(numericCurrent, numericTarget, String(suffix))}
+                              </em>
+                            ) : delta ? (
+                              <em className={Number(delta) > 0 ? "better" : "lower"}>
+                                {Number(delta) > 0 ? "▲" : "▼"} {Math.abs(Number(delta)).toFixed(2)}%
+                              </em>
+                            ) : null}
+                          </span>
+                        );
+                      })}
+                    </div>
+                    <div className="comparison-skill-section">
+                      <strong>스킬별 딜지분 3% 이상</strong>
+                      <div className="comparison-skill-list">
+                        {(() => {
+                          const comparisonSkills = [
+                            ...currentComparisonSummary.skills,
+                            ...comparisonTargetSummary.skills.filter(
+                              (targetSkill) =>
+                                !currentComparisonSummary.skills.some(
+                                  (skill) => skill.skillName === targetSkill.skillName,
+                                ),
+                            ),
+                          ]
+                            .filter((skill) => {
+                              const targetSkill = comparisonTargetSummary.skills.find(
+                                (candidate) => candidate.skillName === skill.skillName,
+                              );
+                              return skill.damageShare >= 3 || (targetSkill?.damageShare ?? 0) >= 3;
+                            })
+                            .sort((a, b) => {
+                              const currentA = currentComparisonSummary.skills.find(
+                                (skill) => skill.skillName === a.skillName,
+                              );
+                              const currentB = currentComparisonSummary.skills.find(
+                                (skill) => skill.skillName === b.skillName,
+                              );
+                              return (currentB?.damageShare ?? 0) - (currentA?.damageShare ?? 0);
+                            });
+                          return comparisonSkills.length ? comparisonSkills.map((skill) => (
+                          (() => {
+                            const currentSkill = currentComparisonSummary.skills.find(
+                              (candidate) => candidate.skillName === skill.skillName,
+                            );
+                            const targetSkill = comparisonTargetSummary.skills.find(
+                              (candidate) => candidate.skillName === skill.skillName,
+                            );
+                            const values = [
+                              ["딜지분", currentSkill?.damageShare ?? 0, targetSkill?.damageShare, "%"],
+                              ["평균 대미지", currentSkill?.averageDamage ?? 0, targetSkill?.averageDamage, ""],
+                              ["분당 사용", currentSkill?.usesPerMinute ?? 0, targetSkill?.usesPerMinute, "회"],
+                            ] as const;
+                            return (
+                              <div className="comparison-skill-item" key={skill.skillName}>
+                                <strong>{skill.skillName}</strong>
+                                {values.map(([label, current, target, suffix]) => {
+                                  const delta =
+                                    target === undefined
+                                      ? null
+                                      : comparisonDelta(current, target);
+                                  return (
+                                    <div className="comparison-skill-value" key={label}>
+                                      <span>{label}</span>
+                                      <b>
+                                        {label === "평균 대미지"
+                                          ? formatDamageInEok(current)
+                                          : current.toFixed(2)}
+                                        {suffix}
+                                        <small className="comparison-inline-target">
+                                          (B군·{target === undefined
+                                            ? "미사용"
+                                            : `${label === "평균 대미지" ? formatDamageInEok(target) : target.toFixed(2)}${suffix}`})
+                                        </small>
+                                      </b>
+                                      {target !== undefined && label === "분당 사용" ? (
+                                        <em className="difference">
+                                          {comparisonDifference(current, target, "회")}
+                                        </em>
+                                      ) : delta ? (
+                                        <em className={Number(delta) > 0 ? "better" : "lower"}>
+                                          {Number(delta) > 0 ? "▲" : "▼"} {Math.abs(Number(delta)).toFixed(2)}%
+                                        </em>
+                                      ) : null}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            );
+                          })()
+                          )) : <small>딜지분 3% 이상인 스킬이 없습니다.</small>;
+                        })()}
+                      </div>
+                    </div>
+                    <div className="comparison-detail-list">
+                      <div className="comparison-detail-item">
+                        <span>공속</span>
+                        <b>
+                          {currentComparisonSummary.attackSpeedPercent.toFixed(2)}%
+                          <small className="comparison-inline-target">
+                            (B군·{comparisonTargetSummary.attackSpeedPercent.toFixed(2)}%)
+                          </small>
+                        </b>
+                        <em className={currentComparisonSummary.attackSpeedPercent >= comparisonTargetSummary.attackSpeedPercent ? "better" : "lower"}>
+                          {comparisonDifference(currentComparisonSummary.attackSpeedPercent, comparisonTargetSummary.attackSpeedPercent, "%")}
+                        </em>
+                      </div>
+                      <div className="comparison-detail-item">
+                        <span>이속</span>
+                        <b>
+                          {currentComparisonSummary.moveSpeedPercent.toFixed(2)}%
+                          <small className="comparison-inline-target">
+                            (B군·{comparisonTargetSummary.moveSpeedPercent.toFixed(2)}%)
+                          </small>
+                        </b>
+                        <em className={currentComparisonSummary.moveSpeedPercent >= comparisonTargetSummary.moveSpeedPercent ? "better" : "lower"}>
+                          {comparisonDifference(currentComparisonSummary.moveSpeedPercent, comparisonTargetSummary.moveSpeedPercent, "%")}
+                        </em>
+                      </div>
+                      <div className="comparison-detail-item">
+                        <span>평균 백어택 비율</span>
+                        <b>
+                          {currentComparisonSummary.averageBackAttackRate.toFixed(2)}%
+                          <small className="comparison-inline-target">
+                            (B군·{typeof comparisonTargetSummary.averageBackAttackRate === "number" ? `${comparisonTargetSummary.averageBackAttackRate.toFixed(2)}%` : "미등록"})
+                          </small>
+                        </b>
+                        {typeof comparisonTargetSummary.averageBackAttackRate === "number" ? (
+                          <em className={currentComparisonSummary.averageBackAttackRate >= comparisonTargetSummary.averageBackAttackRate ? "better" : "lower"}>
+                            {comparisonDifference(currentComparisonSummary.averageBackAttackRate, comparisonTargetSummary.averageBackAttackRate, "%")}
+                          </em>
+                        ) : null}
+                      </div>
+                      <div className="comparison-detail-item">
+                        <span>평균 쿨타임 비율</span>
+                        <b>
+                          {currentComparisonSummary.averageCooldownRate.toFixed(2)}%
+                          <small className="comparison-inline-target">
+                            (B군·{typeof comparisonTargetSummary.averageCooldownRate === "number" ? `${comparisonTargetSummary.averageCooldownRate.toFixed(2)}%` : "미등록"})
+                          </small>
+                        </b>
+                        {typeof comparisonTargetSummary.averageCooldownRate === "number" ? (
+                          <em className={currentComparisonSummary.averageCooldownRate >= comparisonTargetSummary.averageCooldownRate ? "better" : "lower"}>
+                            {comparisonDifference(currentComparisonSummary.averageCooldownRate, comparisonTargetSummary.averageCooldownRate, "%")}
+                          </em>
+                        ) : null}
+                      </div>
+                      <div className="comparison-detail-item">
+                        <span>팔찌 효율</span>
+                        <b>
+                          {currentComparisonSummary.braceletEfficiency === null ? "계산 준비 중" : `${currentComparisonSummary.braceletEfficiency.toFixed(2)}%`}
+                          <small className="comparison-inline-target">
+                            (B군·{comparisonTargetSummary.braceletEfficiency === null ? "계산 준비 중" : `${comparisonTargetSummary.braceletEfficiency.toFixed(2)}%`})
+                          </small>
+                        </b>
+                        {currentComparisonSummary.braceletEfficiency !== null && comparisonTargetSummary.braceletEfficiency !== null ? (
+                          <em className={currentComparisonSummary.braceletEfficiency >= comparisonTargetSummary.braceletEfficiency ? "better" : "lower"}>
+                            {comparisonDifference(currentComparisonSummary.braceletEfficiency, comparisonTargetSummary.braceletEfficiency, "%")}
+                          </em>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : comparisonSetting ? (
+                  <div className="profile-setting-comparison-empty">
+                    이 세팅은 이전 저장 형식입니다. 현재 세팅에서 다시 저장해주세요.
+                  </div>
+                ) : (
+                  <div className="profile-setting-comparison-empty">
+                    세팅 불러오기
+                  </div>
+                )}
+              </section>
               <aside className="floating-doping-panel">
                 <strong>도핑</strong>
                 <label>
@@ -4164,6 +5456,7 @@ export default function Home() {
                       label="정"
                     />
                   </span>
+                  <span className="doping-buff-label">정열</span>
                 </label>
                 <label>
                   <input
@@ -4177,6 +5470,7 @@ export default function Home() {
                   >
                     <Artwork icon={pcBuffIcon.src} label="만" />
                   </span>
+                  <span className="doping-buff-label">만찬</span>
                 </label>
                 <label>
                   <input
@@ -4190,6 +5484,7 @@ export default function Home() {
                   >
                     <Artwork icon={blessingBuffIcon.src} label="축" />
                   </span>
+                  <span className="doping-buff-label">축복</span>
                 </label>
                 <label>
                   <input
@@ -4203,6 +5498,7 @@ export default function Home() {
                   >
                     <Artwork icon={wineBuffIcon.src} label="와" />
                   </span>
+                  <span className="doping-buff-label">와인</span>
                 </label>
                 <label>
                   <input
@@ -4216,6 +5512,7 @@ export default function Home() {
                   >
                     <Artwork icon={azenaBuffIcon.src} label="아" />
                   </span>
+                  <span className="doping-buff-label">아제나</span>
                 </label>
                 <label>
                   <input
@@ -4231,6 +5528,7 @@ export default function Home() {
                   >
                     <Artwork icon={vulnerableAttributeBuffIcon.src} label="취" />
                   </span>
+                  <span className="doping-buff-label">취약속성</span>
                 </label>
                 <label className="critical-rate-synergy-control">
                   <input
@@ -4272,7 +5570,10 @@ export default function Home() {
                       type="checkbox"
                       checked={allCycleBackAttack}
                       onChange={(event) =>
-                        setAllCycleBackAttack(event.target.checked)
+                        toggleAllCycleRatio(
+                          "backAttackRate",
+                          event.target.checked,
+                        )
                       }
                     />
                     <span className="cycle-global-label">
@@ -4296,7 +5597,10 @@ export default function Home() {
                       type="checkbox"
                       checked={allCycleCooldown}
                       onChange={(event) =>
-                        setAllCycleCooldown(event.target.checked)
+                        toggleAllCycleRatio(
+                          "cooldownRate",
+                          event.target.checked,
+                        )
                       }
                     />
                     <span className="cycle-global-label">
@@ -4387,12 +5691,27 @@ export default function Home() {
                     전투 사이클에 스킬을 추가해주세요.
                   </span>
                 )}
+                <input
+                  ref={dpsScreenshotInputRef}
+                  className="dps-screenshot-file-input"
+                  type="file"
+                  accept="image/*"
+                  aria-label="전투 분석기 스크린샷 파일"
+                  onChange={importDpsScreenshot}
+                />
+                <button
+                  type="button"
+                  className="dps-screenshot-upload-button"
+                  onClick={() => dpsScreenshotInputRef.current?.click()}
+                >
+                  전분 스크린샷 불러오기
+                </button>
+                {dpsScreenshotStatus ? (
+                  <small className="dps-screenshot-status">
+                    {dpsScreenshotStatus}
+                  </small>
+                ) : null}
               </aside>
-              <InternalGearSnapshotDebug
-                snapshot={sharedCombatSnapshot!}
-                cycleDamageRows={cycleDamageRows}
-                onExportJson={exportDebugJson}
-              />
               <nav className="sim-tabs" aria-label="시뮬레이션 탭">
                 {simTabs.map((item) => (
                   <button
@@ -5061,6 +6380,13 @@ export default function Home() {
                   </div>
                 ) : null}
               </div>
+              <footer className="simulation-debug-footer">
+                <InternalGearSnapshotDebug
+                  snapshot={sharedCombatSnapshot!}
+                  cycleDamageRows={cycleDamageRows}
+                  onExportJson={exportDebugJson}
+                />
+              </footer>
             </section>
           ) : (
             <section className="empty-start">
@@ -5073,6 +6399,199 @@ export default function Home() {
             </section>
           )}
         </>
+      ) : null}
+      {dpsScreenshotPreview ? (
+        <div
+          className="dps-screenshot-preview-backdrop"
+          role="presentation"
+          onMouseDown={() => setDpsScreenshotPreview(null)}
+        >
+          <section
+            className="dps-screenshot-preview-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="dps-screenshot-preview-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <header>
+              <div>
+                <h2 id="dps-screenshot-preview-title">전분 인식 결과 확인</h2>
+                <p>
+                  잘못 읽힌 값이 있으면 수정한 뒤 전투 사이클에 적용하세요.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="전분 인식 결과 닫기"
+                onClick={() => setDpsScreenshotPreview(null)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="dps-screenshot-preview-heading">
+              <span>스킬</span>
+              <span>백어택 비율</span>
+              <span>
+                쿨타임 비율
+                {excludesScreenshotCooldownRatio ? " (미적용)" : ""}
+              </span>
+            </div>
+            <div className="dps-screenshot-preview-list">
+              {dpsScreenshotPreview.map((ratio, index) => {
+                const skill = cycleSkillCards.find(
+                  (candidate) => candidate.name === ratio.skillName,
+                );
+                const updateRatio = (
+                  key: "backAttackRate" | "cooldownRate",
+                  value: string,
+                ) => {
+                  const numeric = Number(value);
+                  if (!Number.isFinite(numeric)) return;
+                  setDpsScreenshotPreview((current) =>
+                    current?.map((item, itemIndex) =>
+                      itemIndex === index
+                        ? {
+                            ...item,
+                            [key]: Math.min(100, Math.max(0, numeric)),
+                          }
+                        : item,
+                    ) ?? null,
+                  );
+                };
+                return (
+                  <div
+                    className="dps-screenshot-preview-row"
+                    key={ratio.skillName}
+                  >
+                    <span>
+                      {skill?.icon ? (
+                        <img src={skill.icon} alt="" />
+                      ) : null}
+                      <b>{ratio.skillName}</b>
+                    </span>
+                    <label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.01"
+                        value={ratio.backAttackRate}
+                        onChange={(event) =>
+                          updateRatio("backAttackRate", event.target.value)
+                        }
+                      />
+                      <span>%</span>
+                    </label>
+                    {excludesScreenshotCooldownRatio ? (
+                      <span className="dps-screenshot-preview-excluded">
+                        적용 안 함
+                      </span>
+                    ) : (
+                      <label>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.01"
+                          value={ratio.cooldownRate}
+                          onChange={(event) =>
+                            updateRatio("cooldownRate", event.target.value)
+                          }
+                        />
+                        <span>%</span>
+                      </label>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <footer>
+              <button
+                type="button"
+                onClick={() => setDpsScreenshotPreview(null)}
+              >
+                취소
+              </button>
+              <button type="button" onClick={confirmDpsScreenshotPreview}>
+                전투 사이클에 적용
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
+      {saveDialogOpen && character ? (
+        <div
+          className="setting-save-backdrop"
+          role="presentation"
+          onMouseDown={() => setSaveDialogOpen(false)}
+        >
+          <form
+            className="setting-save-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="setting-save-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+            onSubmit={(event) => {
+              event.preventDefault();
+              saveCurrentSetting();
+            }}
+          >
+            <div>
+              <h2 id="setting-save-dialog-title">현재 세팅 저장</h2>
+              <p>
+                장비, 각인, 아크패시브, 보석, 도핑, 전투 사이클과 비율을 현재
+                상태 그대로 저장합니다.
+              </p>
+            </div>
+            <label>
+              <span>세팅 이름</span>
+              <input
+                autoFocus
+                value={saveSettingName}
+                onChange={(event) => setSaveSettingName(event.target.value)}
+                placeholder={`${character.name} 세팅`}
+                maxLength={40}
+              />
+            </label>
+            <label>
+              <span>기존 세팅</span>
+              <select
+                value={saveOverwriteId}
+                onChange={(event) => {
+                  const nextId = event.target.value;
+                  setSaveOverwriteId(nextId);
+                  const selected = savedSettings.find(
+                    (setting) => setting.id === nextId,
+                  );
+                  if (selected) setSaveSettingName(selected.name);
+                }}
+              >
+                <option value="">새 세팅으로 저장</option>
+                {savedSettings.map((setting) => (
+                  <option value={setting.id} key={setting.id}>
+                    {setting.name} · {setting.savedAt}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {saveOverwriteId ? (
+              <p className="setting-save-overwrite-note">
+                선택한 기존 세팅의 전체 스냅샷을 현재 상태로 덮어씁니다.
+              </p>
+            ) : null}
+            <div className="setting-save-actions">
+              <button
+                type="button"
+                onClick={() => setSaveDialogOpen(false)}
+              >
+                취소
+              </button>
+              <button type="submit">
+                {saveOverwriteId ? "덮어쓰기" : "저장"}
+              </button>
+            </div>
+          </form>
+        </div>
       ) : null}
     </main>
   );
