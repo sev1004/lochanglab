@@ -1,9 +1,14 @@
 {
   "name": "lostark-dps-simulator",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "tesseract.js"
+    ]
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",
