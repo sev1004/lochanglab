@@ -504,15 +504,31 @@
 
 .simulation-debug-footer { margin-top:12px; }
 .internal-gear-debug { margin:0; padding:9px 12px; border:1px solid #2d4158; border-radius:5px; background:#101722; }
-.floating-doping-panel { position:fixed; left:-4px; top:180px; z-index:1000; display:grid; gap:7px; width:114px; padding:10px; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; overflow:visible; }
-.floating-doping-panel label { display:flex; align-items:center; justify-content:flex-start; gap:6px; width:100%; }
+.floating-doping-panel { position:fixed; left:0; top:180px; z-index:1000; display:grid; gap:8px; width:146px; padding:5px 5px 22px; box-sizing:border-box; border:1px solid #2d4158; border-radius:6px; background:#101722; box-shadow:0 8px 24px #0006; color:#dce7f3; font-size:10px; overflow:visible; }
+.floating-doping-panel label { display:flex; align-items:center; justify-content:flex-start; gap:6px; width:100%; min-width:0; max-width:100%; box-sizing:border-box; overflow:hidden; }
 .floating-doping-panel label { margin:0; }
 .floating-doping-panel label > input[type=checkbox] { flex:0 0 13px; width:13px; height:13px; margin:0; }
-.doping-buff-label { min-width:0; color:#dce7f3; font-size:10px; line-height:1; white-space:nowrap; }
-.critical-rate-synergy-control { gap:4px !important; white-space:nowrap; }
-.critical-rate-synergy-control > input[type=number] { width:38px; min-width:0; padding:3px 4px; }
-.doping-buff-icon { position:relative; display:inline-flex; width:34px; height:34px; flex:0 0 34px; align-items:center; justify-content:center; cursor:help; }
-.doping-buff-icon .compact-art { width:34px; height:34px; overflow:hidden; }
+.floating-doping-panel > label:not(.flash-orb-control) { min-height:21px; }
+.doping-buff-label { flex:1 1 0; width:0; min-width:0; overflow-wrap:break-word; color:#dce7f3; font-size:10.5px; line-height:1.2; white-space:normal; }
+.critical-rate-synergy-control { display:grid !important; grid-template-columns:13px minmax(0,1fr) 36px 8px; align-items:center; column-gap:6px !important; white-space:nowrap; }
+.critical-rate-synergy-control > input[type=number] { box-sizing:border-box; width:36px; height:21px; min-width:0; margin:0; padding:0 3px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
+.flash-orb-control { display:grid !important; grid-template-columns:13px minmax(50px,1fr) 58px 8px; grid-template-rows:22px 22px; align-items:center; justify-content:start; gap:4px 2px !important; }
+.floating-doping-panel .flash-orb-control { overflow:visible; }
+.flash-orb-control > input[type=checkbox] { grid-column:1; grid-row:1; }
+.flash-orb-title { grid-column:2; grid-row:1; overflow:hidden; color:#dce7f3; font-size:9.5px; font-weight:600; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+.flash-orb-control select { box-sizing:border-box; width:58px; height:22px; padding:0 1px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; }
+.flash-orb-control > select { grid-column:3; grid-row:1; }
+.flash-orb-uptime { display:contents; }
+.flash-orb-uptime > span:first-child { grid-column:2; grid-row:2; align-self:center; color:#dce7f3; font-size:10px; white-space:nowrap; }
+.flash-orb-rate { display:none; }
+.critical-rate-synergy-control > span:first-of-type { color:#dce7f3; font-size:10px; line-height:1.2; }
+.flash-orb-uptime > input[type=number] { grid-column:3; grid-row:2; box-sizing:border-box; width:58px; height:22px; min-width:0; padding:0 2px; border:1px solid #354b63; border-radius:3px; background:#101c2a; color:#eef5ff; font:9px "DM Mono",monospace; text-align:center; }
+.flash-orb-uptime > span:last-child { grid-column:4; grid-row:2; align-self:center; position:relative; top:2px; }
+.flash-orb-rate { position:relative; color:#80e7bd; cursor:help; font-size:9px; line-height:1.1; text-align:center; white-space:nowrap; }
+.flash-orb-rate::after { position:absolute; left:50%; bottom:calc(100% + 6px); z-index:100000; width:max-content; padding:5px 7px; border:1px solid #3b6b5a; border-radius:4px; background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:8px; line-height:1.35; opacity:0; pointer-events:none; transform:translate(-50%, 3px); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
+.flash-orb-rate:hover::after { opacity:1; transform:translate(-50%, 0); visibility:visible; }
+.doping-buff-icon { position:relative; display:inline-flex; width:24px; height:24px; flex:0 0 24px; align-items:center; justify-content:center; cursor:help; }
+.doping-buff-icon .compact-art { width:24px; height:24px; overflow:hidden; }
 .doping-buff-icon .compact-art img { display:block; width:100%; height:100%; object-fit:contain; padding:1px; box-sizing:border-box; }
 .doping-buff-icon::after { position:absolute; left:calc(100% + 6px); top:50%; z-index:100000; width:max-content; max-width:190px; padding:5px 7px; border:1px solid #3b6b5a; border-radius:4px; background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:8px; line-height:1.35; opacity:0; pointer-events:none; transform:translateY(-50%) translateX(-3px); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
 .doping-buff-icon:hover::after,.doping-buff-icon:focus-within::after { opacity:1; transform:translateY(-50%) translateX(0); visibility:visible; }
@@ -540,15 +556,13 @@
 .dps-screenshot-status { color:#91a4b9; font-size:7px; line-height:1.35; word-break:keep-all; }
 .skill-evolution-extra { display:flex; grid-column:2; grid-row:1 / span 2; align-items:center; margin-top:2px; color:#91a4b9; font-size:8px; }
 .skill-evolution-extra b { color:#e6edf5; }
-@media (max-width:900px) { .floating-doping-panel { position:static; width:auto; margin:0 0 10px; } }
+/* 화면 좌표인 left는 확대하지 않고 패널의 시각적 크기만 유지한다. */
+@media (min-width:701px) { .floating-doping-panel { zoom:1; transform:scale(1.2); transform-origin:top left; } }
+.floating-doping-panel.doping-panel-inline { position:static; transform:none; zoom:1; width:100%; margin:10px 0; }
+.doping-inline-slot:empty { display:none; }
 @media (max-width:900px) { .floating-cycle-ratio-panel { position:static; width:auto; margin:0 0 10px; } }
 @media (min-width:901px) {
   .simulation-workspace { position:relative; }
-  /* 중앙 콘텐츠의 좌우 외곽선과 각각 8px만 띄우고, 패널 자체는 원래 크기를 유지한다. */
-  .floating-doping-panel {
-    left:clamp(8px, calc(15.8% - 93px), 15.8%);
-    transform:none;
-  }
   .floating-cycle-ratio-panel {
     /* 150% 확대된 셸의 우측 경계 바깥에 실제 화면 기준 8px 간격을 둔다. */
     position:fixed;

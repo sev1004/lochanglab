@@ -10,6 +10,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import {
   mapCharacterResponse,
   type CharacterProfile,
@@ -96,11 +97,6 @@ import {
 } from "@/domain/combat/t5-evolution";
 import melhaGemIcon from "@/img/10level_a.png";
 import hongyeomGemIcon from "@/img/10level_c.png";
-import pcBuffIcon from "@/img/pcbuff.png";
-import blessingBuffIcon from "@/img/에아달린축복buff.png";
-import wineBuffIcon from "@/img/베르닐와인buff.png";
-import azenaBuffIcon from "@/img/Azenabuff.png";
-import vulnerableAttributeBuffIcon from "@/img/취약속성buff.png";
 import usageApiImage from "@/img/usage-guide/01-api.png";
 import usageSearchImage from "@/img/usage-guide/02-search.png";
 import usageEquipmentImage from "@/img/usage-guide/03-equipment.png";
@@ -113,6 +109,14 @@ import engravingValues from "@/data/engraving-outgoing-damage.json";
 import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
 
 const appVersion = packageJson.version;
+
+const FLASH_ORB_CRITICAL_RATE_BY_STAGE: Record<string, number> = {
+  "0": 0.174,
+  "1": 0.192,
+  "2": 0.1965,
+  "3": 0.2055,
+  "4": 0.21,
+};
 
 function formatDamageInEok(value: number, digits = 2) {
   return `${(value / 100_000_000).toFixed(digits)}억`;
@@ -773,6 +777,9 @@ type SavedSettingSnapshot = {
   vulnerableAttribute: boolean;
   criticalRateSynergyEnabled: boolean;
   criticalRateSynergyValue: string;
+  flashOrbEnabled: boolean;
+  flashOrbStage: string;
+  flashOrbUptime: string;
   comparisonSummary?: SavedSettingComparisonSummary;
 };
 type SavedSetting = {
@@ -1087,6 +1094,7 @@ function buildUnifiedCombatSnapshot(
   vulnerableAttribute = false,
   criticalRateSynergyEnabled = false,
   criticalRateSynergyValue = "",
+  additionalCriticalRate = 0,
 ) {
   const classEngraving = glavierClassEngraving(character);
   const attributes = character.initialCombatAttributes
@@ -1143,6 +1151,10 @@ function buildUnifiedCombatSnapshot(
     evolutionT1Level: 0,
     braceletStat: 0,
   });
+  const configuredCriticalRateSynergy =
+    criticalRateSynergyEnabled && criticalRateSynergyValue !== ""
+      ? Math.min(30, Math.max(0, Number(criticalRateSynergyValue))) / 100
+      : 0;
   const criticalRate = createCriticalRateOptionSnapshot({
     criticalStat,
     accessories: character.equipment.filter((item) =>
@@ -1154,10 +1166,7 @@ function buildUnifiedCombatSnapshot(
     engravings: character.engravingDetails,
     stoneEffects,
     arkGridCores: character.arkGrid.cores,
-    synergyRate:
-      criticalRateSynergyEnabled && criticalRateSynergyValue !== ""
-        ? Math.min(30, Math.max(0, Number(criticalRateSynergyValue))) / 100
-        : 0,
+    synergyRate: configuredCriticalRateSynergy + additionalCriticalRate,
   });
   const criticalDamage = createCriticalDamageSnapshot({
     accessories: character.equipment.filter((item) =>
@@ -1389,6 +1398,21 @@ const siteNotices = [
           "횟수 방식: 동일한 스킬과 버프 조합을 하나로 묶어 사용 횟수로 계산하며, 스킬 순서와 관계없이 일정 시간 동안 사용한 횟수를 기준으로 DPS를 계산합니다.",
         ],
       },
+    ],
+  },
+  {
+    version: "v1.0.1",
+    date: "2026.09.07",
+    title: "섬광구슬 시뮬레이션 지원",
+    items: [
+      "도핑 항목에 섬광구슬 설정 기능이 추가되었습니다.",
+      "섬광 구슬은 기본 유물 +4라는 가정하에 서폿 어빌리티 스톤 레벨에 따른 치명타 적중률 증가 수치를 선택할 수 있습니다.",
+      "치명타 적중률 증가 수치는 17.4% / 19.2% / 19.65% / 20.55% / 21% 중에서 선택할 수 있습니다.",
+      "가동률을 입력하면 섬광구슬 적용·미적용 상태를 각각 계산한 뒤, 가동률에 맞춰 스킬별 평균 대미지와 예상 DPS에 반영합니다.",
+      "뭉툭한 가시 등 치명타 확률에 따라 달라지는 효과도 섬광구슬 적용 상태에서 별도로 계산됩니다.",
+      "팔찌 효율 계산에도 섬광구슬 가동률이 함께 반영됩니다.",
+      "구슬 기본 가동률은 36.41%로 표시되며, 구슬이 나올 확률 20%와 나온 구슬을 챙겨 먹을 확률 70%를 기준으로 합니다. 구슬을 50% 확률로 먹는 경우의 계산상 가동률은 27.1%입니다.",
+      "섬광구슬을 켠 경우 스킬별 최대 대미지는 섬광구슬 적용 기준으로 표시됩니다.",
     ],
   },
   {
@@ -4061,6 +4085,10 @@ export default function Home() {
     useState(false);
   const [criticalRateSynergyValue, setCriticalRateSynergyValue] =
     useState("");
+  const [flashOrbEnabled, setFlashOrbEnabled] = useState(false);
+  const [flashOrbStage, setFlashOrbStage] = useState("0");
+  const [flashOrbUptime, setFlashOrbUptime] = useState("36.41");
+  const [dopingPanelLeft, setDopingPanelLeft] = useState<number | null>(null);
   const [menu, setMenu] = useState<MainMenu>("simulation");
   const [tab, setTab] = useState<SimulationTab>("기본 장비");
   const [apiKey, setApiKey] = useState("");
@@ -4086,6 +4114,10 @@ export default function Home() {
   const automaticCycleKeyRef = useRef<string | null>(null);
   const manualCycleEditRef = useRef(false);
   const restoreSavedCycleRef = useRef(false);
+  const simulationWorkspaceRef = useRef<HTMLElement | null>(null);
+  const dopingPanelRef = useRef<HTMLElement | null>(null);
+  const dopingInlineRef = useRef<HTMLDivElement | null>(null);
+  const [dopingInline, setDopingInline] = useState(false);
   const dpsScreenshotInputRef = useRef<HTMLInputElement>(null);
   const [dpsScreenshotStatus, setDpsScreenshotStatus] = useState("");
   const [dpsScreenshotPreview, setDpsScreenshotPreview] = useState<
@@ -4114,6 +4146,12 @@ export default function Home() {
   const [gemMessage, setGemMessage] = useState("");
   const [stoneEffects, setStoneEffects] = useState<StoneEffect[]>([]);
   const [avatarGrades, setAvatarGrades] = useState<Record<string, string>>({});
+  const flashOrbCriticalRate = flashOrbEnabled
+    ? FLASH_ORB_CRITICAL_RATE_BY_STAGE[flashOrbStage] ?? 0
+    : 0;
+  const flashOrbUptimeRate = flashOrbEnabled
+    ? Math.min(1, Math.max(0, Number(flashOrbUptime) || 0) / 100)
+    : 0;
   const sharedCombatSnapshot = useMemo(
     () =>
       character
@@ -4145,6 +4183,41 @@ export default function Home() {
       vulnerableAttribute,
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
+    ],
+  );
+  const flashOrbCombatSnapshot = useMemo(
+    () =>
+      character && flashOrbCriticalRate > 0
+        ? buildUnifiedCombatSnapshot(
+            character,
+            avatarGrades,
+            stoneEffects,
+            gems,
+            supportRageBuff,
+            banquetBuff,
+            blessingFood,
+            wineFood,
+            azenaBuff,
+            vulnerableAttribute,
+            criticalRateSynergyEnabled,
+            criticalRateSynergyValue,
+            flashOrbCriticalRate,
+          )
+        : null,
+    [
+      character,
+      avatarGrades,
+      stoneEffects,
+      gems,
+      supportRageBuff,
+      banquetBuff,
+      blessingFood,
+      wineFood,
+      azenaBuff,
+      vulnerableAttribute,
+      criticalRateSynergyEnabled,
+      criticalRateSynergyValue,
+      flashOrbCriticalRate,
     ],
   );
   const braceletFreeSnapshot = useMemo(
@@ -4183,6 +4256,46 @@ export default function Home() {
       vulnerableAttribute,
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
+    ],
+  );
+  const braceletFreeFlashOrbSnapshot = useMemo(
+    () =>
+      character && flashOrbCriticalRate > 0
+        ? buildUnifiedCombatSnapshot(
+            {
+              ...character,
+              equipment: character.equipment.filter(
+                (item) => item.slot !== "팔찌",
+              ),
+            },
+            avatarGrades,
+            stoneEffects,
+            gems,
+            supportRageBuff,
+            banquetBuff,
+            blessingFood,
+            wineFood,
+            azenaBuff,
+            vulnerableAttribute,
+            criticalRateSynergyEnabled,
+            criticalRateSynergyValue,
+            flashOrbCriticalRate,
+          )
+        : null,
+    [
+      character,
+      avatarGrades,
+      stoneEffects,
+      gems,
+      supportRageBuff,
+      banquetBuff,
+      blessingFood,
+      wineFood,
+      azenaBuff,
+      vulnerableAttribute,
+      criticalRateSynergyEnabled,
+      criticalRateSynergyValue,
+      flashOrbCriticalRate,
     ],
   );
   function applyProfile(profile: CharacterProfile) {
@@ -4299,6 +4412,43 @@ export default function Home() {
     }
     return skills;
   }, []);
+  useEffect(() => {
+    const workspace = simulationWorkspaceRef.current;
+    const panel = dopingPanelRef.current;
+    if (!workspace || !panel) {
+      setDopingPanelLeft(null);
+      return;
+    }
+    let animationFrame = 0;
+    const updatePosition = () => {
+      cancelAnimationFrame(animationFrame);
+      animationFrame = requestAnimationFrame(() => {
+        const workspaceRect = workspace.getBoundingClientRect();
+        const panelRect = panel.getBoundingClientRect();
+        const needsInline = workspaceRect.left < panelRect.width;
+        setDopingInline(needsInline);
+        if (needsInline) return;
+        // 본문 카드 외곽선과 도핑 패널 사이에 눈에 보이는 여백을 유지한다.
+        const nextLeft = Math.max(
+          0,
+          workspaceRect.left - panelRect.width - 12,
+        );
+        setDopingPanelLeft(nextLeft);
+      });
+    };
+    const observer = new ResizeObserver(updatePosition);
+    observer.observe(workspace);
+    observer.observe(panel);
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    updatePosition();
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      observer.disconnect();
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+    };
+  }, [character, menu, dopingInline]);
 
   function updateCycleEntry(
     entryId: string,
@@ -4555,19 +4705,122 @@ export default function Home() {
     >;
     return { snapshot: simulationSnapshot, skills };
   };
-  const unifiedSimulation = useMemo(
+  const blendFlashOrbSimulation = (
+    baseSimulation: ReturnType<typeof buildSimulationForSnapshot>,
+    flashOrbSimulation: ReturnType<typeof buildSimulationForSnapshot>,
+    uptimeRate: number,
+  ) => {
+    if (!baseSimulation || !flashOrbSimulation || uptimeRate <= 0) {
+      return baseSimulation;
+    }
+    const baseRate = 1 - uptimeRate;
+    return {
+      ...baseSimulation,
+      skills: Object.fromEntries(
+        Object.entries(baseSimulation.skills).map(([skillId, baseSkill]) => {
+          const flashOrbSkill = flashOrbSimulation.skills[skillId];
+          if (!flashOrbSkill) return [skillId, baseSkill];
+          const scenarios = baseSkill.calculation.scenarios.map(
+            (baseScenario) => {
+              const flashOrbScenario = flashOrbSkill.calculation.scenarios.find(
+                (scenario) =>
+                  scenario.conditions.azureDragonBuff ===
+                    baseScenario.conditions.azureDragonBuff &&
+                  scenario.conditions.backAttack ===
+                    baseScenario.conditions.backAttack &&
+                  scenario.conditions.yeongaSimGong ===
+                    baseScenario.conditions.yeongaSimGong,
+              );
+              return flashOrbScenario
+                ? {
+                  ...baseScenario,
+                  // 최대 대미지는 섬광구슬이 켜진 상태에서 가능한 최고값을 표기한다.
+                  maximumDamage: flashOrbScenario.maximumDamage,
+                  averageDamage:
+                    baseScenario.averageDamage * baseRate +
+                      flashOrbScenario.averageDamage * uptimeRate,
+                  }
+                : baseScenario;
+            },
+          );
+          const defaultScenario = scenarios.find(
+            (scenario) =>
+              !scenario.conditions.azureDragonBuff &&
+              !scenario.conditions.backAttack &&
+              !scenario.conditions.yeongaSimGong,
+          );
+          return [
+            skillId,
+            {
+              ...baseSkill,
+              calculation: {
+                ...baseSkill.calculation,
+                scenarios,
+                expectedDamage:
+                  defaultScenario?.averageDamage ??
+                  baseSkill.calculation.expectedDamage,
+              },
+            },
+          ];
+        }),
+      ) as typeof baseSimulation.skills,
+    };
+  };
+  const baseUnifiedSimulation = useMemo(
     () =>
       character && sharedCombatSnapshot
         ? buildSimulationForSnapshot(sharedCombatSnapshot)
         : null,
     [character, gems, sharedCombatSnapshot, supportRageBuff, visibleSkills],
   );
-  const braceletFreeSimulation = useMemo(
+  const flashOrbSimulation = useMemo(
+    () =>
+      flashOrbCombatSnapshot
+        ? buildSimulationForSnapshot(flashOrbCombatSnapshot)
+        : null,
+    [character, gems, flashOrbCombatSnapshot, supportRageBuff, visibleSkills],
+  );
+  const unifiedSimulation = useMemo(
+    () =>
+      blendFlashOrbSimulation(
+        baseUnifiedSimulation,
+        flashOrbSimulation,
+        flashOrbUptimeRate,
+      ),
+    [baseUnifiedSimulation, flashOrbSimulation, flashOrbUptimeRate],
+  );
+  const baseBraceletFreeSimulation = useMemo(
     () =>
       braceletFreeSnapshot
         ? buildSimulationForSnapshot(braceletFreeSnapshot, false)
         : null,
     [character, gems, braceletFreeSnapshot, supportRageBuff, visibleSkills],
+  );
+  const braceletFreeFlashOrbSimulation = useMemo(
+    () =>
+      braceletFreeFlashOrbSnapshot
+        ? buildSimulationForSnapshot(braceletFreeFlashOrbSnapshot, false)
+        : null,
+    [
+      character,
+      gems,
+      braceletFreeFlashOrbSnapshot,
+      supportRageBuff,
+      visibleSkills,
+    ],
+  );
+  const braceletFreeSimulation = useMemo(
+    () =>
+      blendFlashOrbSimulation(
+        baseBraceletFreeSimulation,
+        braceletFreeFlashOrbSimulation,
+        flashOrbUptimeRate,
+      ),
+    [
+      baseBraceletFreeSimulation,
+      braceletFreeFlashOrbSimulation,
+      flashOrbUptimeRate,
+    ],
   );
   useEffect(() => {
     if (!character || !unifiedSimulation) return;
@@ -5368,6 +5621,9 @@ export default function Home() {
         vulnerableAttribute,
         criticalRateSynergyEnabled,
         criticalRateSynergyValue,
+        flashOrbEnabled,
+        flashOrbStage,
+        flashOrbUptime,
         comparisonSummary: currentComparisonSummary ?? undefined,
       }),
     ) as SavedSettingSnapshot;
@@ -5483,6 +5739,9 @@ export default function Home() {
     setVulnerableAttribute(snapshot.vulnerableAttribute);
     setCriticalRateSynergyEnabled(snapshot.criticalRateSynergyEnabled);
     setCriticalRateSynergyValue(snapshot.criticalRateSynergyValue);
+    setFlashOrbEnabled(snapshot.flashOrbEnabled ?? false);
+    setFlashOrbStage(snapshot.flashOrbStage ?? "0");
+    setFlashOrbUptime(snapshot.flashOrbUptime ?? "36.41");
     setTab("기본 장비");
     setMenu("simulation");
     setMessage(`'${setting.name}' 세팅을 불러왔습니다.`);
@@ -5597,7 +5856,10 @@ export default function Home() {
       {menu === "simulation" ? (
         <>
           {character ? (
-            <section className="workspace simulation-workspace">
+            <section
+              className="workspace simulation-workspace"
+              ref={simulationWorkspaceRef}
+            >
               <div className="profile-strip">
                 <Artwork icon={character.characterImage} label="⚔" />
                 <div className="profile-identity">
@@ -5955,7 +6217,18 @@ export default function Home() {
                   </div>
                 )}
               </section>
-              <aside className="floating-doping-panel">
+              <div ref={dopingInlineRef} className="doping-inline-slot" />
+              {typeof document !== "undefined"
+                ? createPortal(
+              <aside
+                className={`floating-doping-panel${dopingInline ? " doping-panel-inline" : ""}`}
+                ref={dopingPanelRef}
+                style={
+                  dopingPanelLeft === null
+                    ? undefined
+                    : { left: `${dopingPanelLeft}px` }
+                }
+              >
                 <strong>도핑</strong>
                 <label>
                   <input
@@ -5965,16 +6238,7 @@ export default function Home() {
                       setSupportRageBuff(event.target.checked)
                     }
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="공이속 9% · 진화형 피해 14%"
-                  >
-                    <Artwork
-                      icon="https://cdn-lostark.game.onstove.com/efui_iconatlas/ark_passive_evolution/ark_passive_evolution_33.png"
-                      label="정"
-                    />
-                  </span>
-                  <span className="doping-buff-label">정열</span>
+                  <span className="doping-buff-label" title="진화형 피해 +14%, 공이속 +9%">정열</span>
                 </label>
                 <label>
                   <input
@@ -5982,13 +6246,7 @@ export default function Home() {
                     checked={banquetBuff}
                     onChange={(event) => setBanquetBuff(event.target.checked)}
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="공이속 5% · 무기 공격력 +1600"
-                  >
-                    <Artwork icon={pcBuffIcon.src} label="만" />
-                  </span>
-                  <span className="doping-buff-label">만찬</span>
+                  <span className="doping-buff-label" title="무기 공격력 +1600, 공이속 +5%">만찬</span>
                 </label>
                 <label>
                   <input
@@ -5996,13 +6254,7 @@ export default function Home() {
                     checked={blessingFood}
                     onChange={(event) => setBlessingFood(event.target.checked)}
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="공속 3%"
-                  >
-                    <Artwork icon={blessingBuffIcon.src} label="축" />
-                  </span>
-                  <span className="doping-buff-label">축복</span>
+                  <span className="doping-buff-label" title="공속 +3%">축복</span>
                 </label>
                 <label>
                   <input
@@ -6010,13 +6262,7 @@ export default function Home() {
                     checked={wineFood}
                     onChange={(event) => setWineFood(event.target.checked)}
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="이속 3%"
-                  >
-                    <Artwork icon={wineBuffIcon.src} label="와" />
-                  </span>
-                  <span className="doping-buff-label">와인</span>
+                  <span className="doping-buff-label" title="이속 +3%">와인</span>
                 </label>
                 <label>
                   <input
@@ -6024,13 +6270,7 @@ export default function Home() {
                     checked={azenaBuff}
                     onChange={(event) => setAzenaBuff(event.target.checked)}
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="힘/민/지 +6000"
-                  >
-                    <Artwork icon={azenaBuffIcon.src} label="아" />
-                  </span>
-                  <span className="doping-buff-label">아제나</span>
+                  <span className="doping-buff-label" title="힘/민/지 +6000">아제나</span>
                 </label>
                 <label>
                   <input
@@ -6040,13 +6280,7 @@ export default function Home() {
                       setVulnerableAttribute(event.target.checked)
                     }
                   />{" "}
-                  <span
-                    className="doping-buff-icon"
-                    data-tooltip="피해 10% 증가"
-                  >
-                    <Artwork icon={vulnerableAttributeBuffIcon.src} label="취" />
-                  </span>
-                  <span className="doping-buff-label">취약속성</span>
+                  <span className="doping-buff-label" title="피해 +10%">취약속성</span>
                 </label>
                 <label className="critical-rate-synergy-control">
                   <input
@@ -6056,7 +6290,7 @@ export default function Home() {
                       setCriticalRateSynergyEnabled(event.target.checked)
                     }
                   />
-                  <span>치확</span>
+                  <span title="치명타 적중률 시너지">치확 시너지</span>
                   <input
                     aria-label="치명타 적중률 시너지"
                     type="number"
@@ -6079,7 +6313,55 @@ export default function Home() {
                   />
                   <span>%</span>
                 </label>
-              </aside>
+                <label className="flash-orb-control">
+                  <input
+                    type="checkbox"
+                    checked={flashOrbEnabled}
+                    onChange={(event) => setFlashOrbEnabled(event.target.checked)}
+                  />
+                  <span className="flash-orb-title">섬광구슬</span>
+                  <select
+                    aria-label="섬광의 구슬 단계"
+                    value={flashOrbStage}
+                    onChange={(event) => setFlashOrbStage(event.target.value)}
+                  >
+                    <option value="4">21%</option>
+                    <option value="3">20.55%</option>
+                    <option value="2">19.65%</option>
+                    <option value="1">19.2%</option>
+                    <option value="0">17.4%</option>
+                  </select>
+                  <span className="flash-orb-uptime">
+                    <span>가동률</span>
+                    <input
+                      aria-label="섬광의 구슬 가동률"
+                      type="number"
+                      min="0"
+                      max="100"
+                      step="0.01"
+                      value={flashOrbUptime}
+                      onChange={(event) => {
+                        const nextValue = event.target.value;
+                        if (nextValue === "") {
+                          setFlashOrbUptime("");
+                          return;
+                        }
+                        const numericValue = Number(nextValue);
+                        if (!Number.isFinite(numericValue)) return;
+                        setFlashOrbUptime(
+                          String(Math.min(100, Math.max(0, numericValue))),
+                        );
+                      }}
+                    />
+                    <span>%</span>
+                  </span>
+                </label>
+              </aside>,
+                  dopingInline && dopingInlineRef.current
+                    ? dopingInlineRef.current
+                    : document.body,
+                )
+                : null}
               <aside className="floating-cycle-ratio-panel">
                 <strong>전투 사이클 스킬</strong>
                 <div className="cycle-ratio-global-options">
