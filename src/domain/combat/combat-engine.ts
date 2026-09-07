@@ -524,11 +524,25 @@ export function calculateSingleSkillDamage(
     input.skill.selectedTripodNames ?? [],
     input.skill.includeConditionalTripods === true,
   );
+  const comboTripodBySkill: Record<string, string> = {
+    이연격: "속성 강타",
+    맹룡열파: "추가 베기",
+    회선창: "연속 회전",
+    풍진격: "대회전",
+    나선창: "어깨 치기",
+  };
+  const effectiveOperationType =
+    comboTripodBySkill[skill.name] &&
+    (input.skill.selectedTripodNames ?? []).includes(
+      comboTripodBySkill[skill.name],
+    )
+      ? "콤보"
+      : skill.operationType;
   const arkGridOrder = createArkGridOrderSkillModifierSnapshot(
     input.snapshot?.arkGridOrderSkillEffects ?? [],
     {
       skillName: skill.name,
-      operationType: skill.operationType,
+      operationType: effectiveOperationType,
       tags: skill.tags,
       selectedTripodNames: input.skill.selectedTripodNames ?? [],
     },
@@ -799,8 +813,12 @@ export function calculateSingleSkillDamage(
     ? (input.snapshot?.superChargeSkillDamageMultiplier ?? 1)
     : 1;
   const enlightenmentSkillScale =
+    (skill.tags.flurry && enlightenmentLevel("절제") > 0 ? 1.6 : 1) *
     (skill.tags.flurry ? 1 + enlightenmentLevel("전환 난무") * 0.007 : 1) *
-    (skill.tags.focus ? 1 + enlightenmentLevel("강력한 찌르기") * 0.012 : 1);
+    (skill.tags.focus ? 1 + enlightenmentLevel("강력한 찌르기") * 0.012 : 1) *
+    (skill.name === "연가비기"
+      ? 1 + Math.max(0, enlightenmentLevel("연가비기") - 1)
+      : 1);
   const skillTypeDamageMultiplier =
     focusSkillScale *
     flurrySkillScale *
@@ -891,7 +909,7 @@ export function calculateSingleSkillDamage(
     skill: {
       name: skill.name,
       code: skill.code,
-      operationType: skill.operationType,
+      operationType: effectiveOperationType,
       tags: skill.tags,
       baseCooldownSeconds: skill.baseCooldownSeconds,
     },
