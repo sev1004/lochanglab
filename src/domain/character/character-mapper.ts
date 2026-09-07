@@ -38,6 +38,7 @@ export type CharacterProfile = {
   arkGrid: ArkGridProfile;
   initialCriticalStat?: { evolutionT1Level: number; braceletStat: number };
   initialCombatAttributes?: CombatAttributeBaseline;
+  combatAttributeBaselineVersion?: number;
   raw: CharacterApiResponse;
 };
 

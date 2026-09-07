@@ -16,6 +16,7 @@ import {
   type EngravingProfile,
 } from "@/domain/character/character-mapper";
 import type { EquipmentProfile } from "@/domain/character/equipment-parser";
+import { readBraceletStats } from "@/domain/bracelet/bracelet-stats";
 import {
   GLAVIER_ORDER_CORE_OPTIONS,
   type ArkEffectProfile,
@@ -1367,6 +1368,29 @@ const errors: Record<number, string> = {
 };
 const simTabs: SimulationTab[] = ["기본 장비", "스킬 & 전투 사이클"];
 const siteNotices = [
+  {
+    version: "v1.0.0",
+    date: "2026.09.07",
+    title: "절제 및 전투 사이클 구성 방식 업데이트",
+    sections: [
+      {
+        title: "절제 직업 지원",
+        items: [
+          "절제에 대한 DPS 시뮬레이터 계산이 가능합니다.",
+          "절제 222·232 세팅의 기본 전투 사이클을 제공합니다.",
+          "그 외 전투 사이클 구성은 사이클 횟수 방식으로 직접 설정해서 체크 부탁드립니다.",
+        ],
+      },
+      {
+        title: "전투 사이클 구성 방식 추가",
+        description: "전투 사이클을 두 가지 방식으로 구성할 수 있습니다.",
+        items: [
+          "순서 방식: 스킬을 실제 사용 순서대로 하나씩 배치하며, 스킬의 순서를 직접 변경할 수 있습니다.",
+          "횟수 방식: 동일한 스킬과 버프 조합을 하나로 묶어 사용 횟수로 계산하며, 스킬 순서와 관계없이 일정 시간 동안 사용한 횟수를 기준으로 DPS를 계산합니다.",
+        ],
+      },
+    ],
+  },
   {
     version: "v0.1.1",
     date: "2026.09.06",
@@ -3619,18 +3643,7 @@ function initialAvatarGrades(profile: CharacterProfile) {
 }
 
 function criticalBraceletStat(profile: CharacterProfile) {
-  return (
-    profile.equipment
-      .find((item) => item.slot === "팔찌")
-      ?.baseStats.reduce(
-        (total, value) =>
-          total +
-          Number(
-            value.match(/^치명\s*\+?([\d,]+)/)?.[1]?.replaceAll(",", "") ?? 0,
-          ),
-        0,
-      ) ?? 0
-  );
+  return readBraceletStats(profile.equipment.find((item) => item.slot === "팔찌"))["치명"] ?? 0;
 }
 function combatAttributeInput(profile: CharacterProfile) {
   const names = ["특화", "신속", "치명", "제압", "인내", "숙련"];
@@ -3648,16 +3661,7 @@ function combatAttributeInput(profile: CharacterProfile) {
     braceletStats: Object.fromEntries(
       names.map((name) => [
         name,
-        bracelet?.baseStats.reduce(
-          (total, value) =>
-            total +
-            Number(
-              value
-                .match(new RegExp(`^${name}\\s*\\+?([\\d,]+)`))?.[1]
-                ?.replaceAll(",", "") ?? 0,
-            ),
-          0,
-        ) ?? 0,
+        readBraceletStats(bracelet)[name] ?? 0,
       ]),
     ),
   };
@@ -3924,11 +3928,27 @@ function NoticePage() {
               </div>
               <time>{notice.date}</time>
             </div>
-            <ul>
-              {notice.items.map((item) => (
-                <li key={item}>{item}</li>
-              ))}
-            </ul>
+            {"sections" in notice ? (
+              <div className="notice-sections">
+                {notice.sections?.map((section) => (
+                  <section key={section.title}>
+                    <h3>{section.title}</h3>
+                    {section.description ? <p>{section.description}</p> : null}
+                    <ul>
+                      {section.items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </section>
+                ))}
+              </div>
+            ) : (
+              <ul>
+                {notice.items?.map((item) => (
+                  <li key={item}>{item}</li>
+                ))}
+              </ul>
+            )}
           </article>
         ))}
       </div>
@@ -3982,9 +4002,9 @@ function UsagePage() {
       number: "06",
       title: "스킬 & 전투 사이클 탭",
       description:
-        "스킬 & 전투 사이클 탭에서 자동 구성된 사이클과 예상 사이클 시간을 확인하세요. 스킬을 추가하거나 삭제하고, 좌우 이동 버튼으로 사용 순서를 바꿀 수 있습니다. 아래에서는 스킬 레벨·트라이포드·보석과 스킬별 대미지도 조정할 수 있습니다.",
+        "스킬 & 전투 사이클 탭에서는 순서 방식과 횟수 방식 중 하나를 선택할 수 있습니다. 순서 방식은 스킬을 실제 사용 순서대로 하나씩 배치하고 이동하는 방식입니다. 횟수 방식은 동일한 스킬과 버프 조합을 하나로 묶어 횟수만 입력하는 방식이며, 스킬 순서는 계산에 사용하지 않습니다. 방식을 전환해도 기존 구성은 가능한 범위에서 유지되며, 스킬 카드에서는 청룡진·연가심공 적용 여부를 각각 설정할 수 있습니다.",
       image: usageSkillCycleImage,
-      alt: "스킬 및 전투 사이클 탭 화면",
+      alt: "순서 방식과 횟수 방식을 선택할 수 있는 스킬 및 전투 사이클 탭 화면",
     },
     {
       number: "07",
@@ -4169,6 +4189,7 @@ export default function Home() {
     const profileWithClassSkill = ensureJeoljeYeongaSkill(profile);
     const cleanProfile = {
       ...profileWithClassSkill,
+      combatAttributeBaselineVersion: 1,
       gems: profileWithClassSkill.gems.map(normalizeGem),
       arkPassive: {
         ...profileWithClassSkill.arkPassive,
@@ -4298,10 +4319,11 @@ export default function Home() {
     });
   }
 
-  function switchCycleBuilderMode() {
+  function switchCycleBuilderMode(nextMode: CycleBuilderMode) {
+    if (nextMode === cycleBuilderMode) return;
     manualCycleEditRef.current = true;
     setDraggedCycleIndex(null);
-    if (cycleBuilderMode === "sequence") {
+    if (nextMode === "count") {
       const originalSequence = cycle.map((entry) => ({ ...entry }));
       const groupedCycle = groupCycleEntriesByUsage(originalSequence);
       setSequenceCycleBackup(originalSequence);
@@ -4614,21 +4636,40 @@ export default function Home() {
     character,
     cycleBuilderMode,
   ]);
-  const guidelineCycleSeconds = (() => {
-    if (!selectedCyclePreset || !unifiedSimulation) return null;
+  const calculateGuidelineCycleSeconds = (
+    simulation: typeof unifiedSimulation,
+  ) => {
+    if (!selectedCyclePreset || !simulation) return null;
     if (selectedCyclePreset.guidanceSeconds !== undefined) {
       return selectedCyclePreset.guidanceSeconds;
     }
     const targetSkillName =
       selectedCyclePreset.id === "jeoljeong-222" ? "적룡필살" : "적룡포";
-    const targetCooldown = Object.values(unifiedSimulation.skills).find(
+    const targetCooldown = Object.values(simulation.skills).find(
       (entry) => entry.calculation.skill.name === targetSkillName,
     )?.cooldown?.cooldownSeconds;
-    if (targetCooldown === undefined) return null;
+    if (targetCooldown === undefined || !Number.isFinite(targetCooldown)) return null;
+    if (classEngraving === "절정" && cycleBuilderMode === "count") {
+      const targetUseCount = cycle.reduce(
+        (total, entry) =>
+          entry.skillName === targetSkillName
+            ? total + Math.max(0, Math.floor(Number(entry.useCount) || 0))
+            : total,
+        0,
+      );
+      return targetUseCount > 0 ? targetCooldown * targetUseCount : null;
+    }
     return selectedCyclePreset.id === "jeoljeong-222"
       ? targetCooldown
       : targetCooldown * 3;
-  })();
+  };
+  const guidelineCycleSeconds = calculateGuidelineCycleSeconds(unifiedSimulation);
+  const braceletFreeCycleSeconds =
+    classEngraving === "절정" && cycleDurationMode === "guideline"
+      ? calculateGuidelineCycleSeconds(braceletFreeSimulation)
+      : cycleDurationMode === "guideline"
+        ? guidelineCycleSeconds
+        : Number(manualCycleSeconds);
   const selectedCycleSeconds =
     cycleDurationMode === "guideline"
       ? guidelineCycleSeconds
@@ -4705,11 +4746,14 @@ export default function Home() {
         cycleSeconds
       : null;
   const braceletFreeExpectedDps =
-    cycleSeconds > 0 && braceletFreeCycleDamageRows.length > 0
+    braceletFreeCycleSeconds !== null &&
+    Number.isFinite(braceletFreeCycleSeconds) &&
+    braceletFreeCycleSeconds > 0 &&
+    braceletFreeCycleDamageRows.length > 0
       ? braceletFreeCycleDamageRows.reduce(
           (total, row) => total + row.totalDamage,
           0,
-        ) / cycleSeconds
+        ) / braceletFreeCycleSeconds
       : null;
   const braceletEfficiency =
     expectedDps !== null &&
@@ -5390,6 +5434,19 @@ export default function Home() {
     restoreSavedCycleRef.current = true;
     manualCycleEditRef.current = true;
     const characterWithClassSkill = ensureJeoljeYeongaSkill(snapshot.character);
+    if (characterWithClassSkill.combatAttributeBaselineVersion !== 1) {
+      const originalProfile = mapCharacterResponse(characterWithClassSkill.raw);
+      characterWithClassSkill.initialCombatAttributes = createCombatAttributeSnapshots(
+        combatAttributeInput(originalProfile),
+      );
+      characterWithClassSkill.initialCriticalStat = {
+        evolutionT1Level: originalProfile.arkPassive.evolution.find(
+          (effect) => effect.name === "치명",
+        )?.level ?? 0,
+        braceletStat: criticalBraceletStat(originalProfile),
+      };
+      characterWithClassSkill.combatAttributeBaselineVersion = 1;
+    }
     setCharacter(characterWithClassSkill);
     setCharacterName(characterWithClassSkill.name);
     setGems(snapshot.gems);
@@ -6658,26 +6715,39 @@ export default function Home() {
                           >
                             전체 스킬 제거
                           </button>
-                          <button
-                            type="button"
-                            className="cycle-builder-mode-button"
-                            aria-label={
-                              cycleBuilderMode === "sequence"
-                                ? "현재 순서 방식, 횟수 방식으로 변경"
-                                : "현재 횟수 방식, 순서 방식으로 변경"
-                            }
-                            aria-pressed={cycleBuilderMode === "count"}
-                            data-tooltip={
-                              cycleBuilderMode === "sequence"
-                                ? "스킬을 실제 사용 순서대로 배치하고 이동할 수 있는 방식입니다."
-                                : "동일한 스킬과 버프 조합을 묶어 사용 횟수로 계산하는 방식입니다."
-                            }
-                            onClick={switchCycleBuilderMode}
+                          <fieldset
+                            className="cycle-builder-mode-options"
+                            aria-label="사이클 구성 방식"
                           >
-                            {cycleBuilderMode === "sequence"
-                              ? "순서 방식"
-                              : "횟수 방식"}
-                          </button>
+                            <label
+                              className="cycle-builder-mode-option"
+                              data-tooltip="스킬을 실제 사용 순서대로 배치하고 이동할 수 있는 방식입니다."
+                            >
+                              <input
+                                type="radio"
+                                name="cycle-builder-mode"
+                                value="sequence"
+                                checked={cycleBuilderMode === "sequence"}
+                                onChange={() =>
+                                  switchCycleBuilderMode("sequence")
+                                }
+                              />
+                              <span>순서 방식</span>
+                            </label>
+                            <label
+                              className="cycle-builder-mode-option"
+                              data-tooltip="동일한 스킬과 버프 조합을 묶어 사용 횟수로 계산하는 방식입니다."
+                            >
+                              <input
+                                type="radio"
+                                name="cycle-builder-mode"
+                                value="count"
+                                checked={cycleBuilderMode === "count"}
+                                onChange={() => switchCycleBuilderMode("count")}
+                              />
+                              <span>횟수 방식</span>
+                            </label>
+                          </fieldset>
                         </div>
                         <div className="cycle-duration-controls">
                           <label className="cycle-duration-option">
@@ -6733,7 +6803,12 @@ export default function Home() {
 
                             return (
                               <li
-                                className="cycle-skill-tile"
+                                className={`cycle-skill-tile${
+                                  classEngraving === "절제" &&
+                                  cycleBuilderMode === "sequence"
+                                    ? " no-cycle-controls"
+                                    : ""
+                                }`}
                                 key={entry.id}
                                 draggable={cycleBuilderMode === "sequence"}
                                 onDragStart={
@@ -6788,7 +6863,8 @@ export default function Home() {
                                 <span className="cycle-skill-name">
                                   {skillName}
                                 </span>
-                                <div className="cycle-skill-buffs">
+                                {classEngraving !== "절제" ? (
+                                  <div className="cycle-skill-buffs">
                                   <button
                                     className={
                                       entry.azureDragon ? "active" : ""
@@ -6850,10 +6926,11 @@ export default function Home() {
                                       <span>연</span>
                                     )}
                                   </button>
-                                </div>
+                                  </div>
+                                ) : null}
                                 {cycleBuilderMode === "count" ? (
                                   <label className="cycle-use-count">
-                                    <span>사용 횟수</span>
+                                    <span>횟수</span>
                                     <input
                                       type="number"
                                       min="0"
@@ -6874,8 +6951,8 @@ export default function Home() {
                                       }}
                                     />
                                   </label>
-                                ) : (
-                                <div className="cycle-skill-actions">
+                                ) : classEngraving !== "절제" ? (
+                                  <div className="cycle-skill-actions">
                                   <button
                                     type="button"
                                     aria-label={`${skillName} 한 칸 왼쪽 이동`}
@@ -6912,8 +6989,8 @@ export default function Home() {
                                   >
                                     →
                                   </button>
-                                </div>
-                                )}
+                                  </div>
+                                ) : null}
                                 <button
                                   className="cycle-skill-remove"
                                   type="button"

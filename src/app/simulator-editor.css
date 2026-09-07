@@ -379,7 +379,7 @@
 .accessory-stat-gray { background:#888 !important; color:#fff !important; }
 .accessory-editor .quality-art > span[class^="accessory-stat-"] { min-height:14px !important; padding:2px 0 !important; font-size:9px !important; letter-spacing:-.25px; line-height:10px !important; }
 .accessory-editor .quality-art[data-accessory-grade] > span[class^="accessory-stat-"] { min-height:12px !important; padding:1px 0 !important; font-size:8px !important; line-height:9px !important; }
-.accessory-editor .quality-art { overflow:hidden; border-radius:5px; background:#111722; }
+.accessory-editor .quality-art { align-self:start; overflow:hidden; padding-bottom:0 !important; border-radius:5px; background:#111722; }
 .accessory-editor .quality-art { width:100%; min-width:0; }
 .accessory-editor .quality-art .compact-art { display:block; width:100% !important; height:auto !important; aspect-ratio:1; border-radius:5px 5px 0 0; }
 .accessory-editor .quality-art > span[class^="accessory-stat-"] { display:block; width:100%; box-sizing:border-box; border-radius:0 0 4px 4px; }
