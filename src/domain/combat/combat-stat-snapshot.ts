@@ -60,6 +60,7 @@ export type CriticalRateOptionSnapshot = {
   accessoryRate: number;
   braceletRate: number;
   evolutionRate: number;
+  enlightenmentRate: number;
   engravingRate: number;
   stoneRate: number;
   arkGridRate: number;
@@ -360,6 +361,7 @@ export function createCriticalRateOptionSnapshot(source: {
   accessories: readonly EquipmentProfile[];
   bracelet?: EquipmentProfile;
   evolution: readonly { name: string; level: number | null }[];
+  enlightenment: readonly { name: string; level: number | null }[];
   engravings: readonly {
     name: string;
     grade: "유물" | "전설";
@@ -413,6 +415,11 @@ export function createCriticalRateOptionSnapshot(source: {
     };
     return total + ((perLevel[effect.name] ?? 0) * (effect.level ?? 0)) / 100;
   }, 0);
+  const enlightenmentRate = source.enlightenment.some(
+    (effect) => effect.name === "연가비기" && (effect.level ?? 0) >= 1,
+  )
+    ? 0.2
+    : 0;
   const engravingRate = source.engravings.reduce(
     (total, effect) =>
       total +
@@ -438,6 +445,7 @@ export function createCriticalRateOptionSnapshot(source: {
     accessoryRate +
     braceletRate +
     evolutionRate +
+    enlightenmentRate +
     engravingRate +
     stoneRate +
     arkGridRate +
@@ -447,6 +455,7 @@ export function createCriticalRateOptionSnapshot(source: {
     accessoryRate,
     braceletRate,
     evolutionRate,
+    enlightenmentRate,
     engravingRate,
     stoneRate,
     arkGridRate,

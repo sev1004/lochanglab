@@ -294,6 +294,94 @@
   height: 100%;
   object-fit: cover;
 }
+.gear-editor .compact-art {
+  border-radius: 6px;
+}
+.accessory-editor .quality-art .compact-art,
+.bracelet-editor .bracelet-art .compact-art,
+.ark-grid-core-art,
+.ark-grid-effect-art {
+  border-radius: 6px;
+}
+.accessory-editor .quality-art .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(186, 168, 129, 0.95),
+    rgba(186, 168, 129, 0.72)
+  );
+}
+.bracelet-editor .bracelet-art[data-bracelet-grade="고대"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(186, 168, 129, 0.95),
+    rgba(186, 168, 129, 0.72)
+  );
+}
+.ark-grid-core-art[data-ark-grade="유물"],
+.ark-grid-effect-art[data-ark-grade="유물"] {
+  background: linear-gradient(
+    145deg,
+    rgba(192, 96, 0, 0.95),
+    rgba(192, 96, 0, 0.7)
+  );
+}
+.ark-grid-core-art[data-ark-grade="고대"],
+.ark-grid-effect-art[data-ark-grade="고대"] {
+  background: linear-gradient(
+    145deg,
+    rgba(186, 168, 129, 0.95),
+    rgba(186, 168, 129, 0.72)
+  );
+}
+.quality-art[data-gear-grade="전율"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(186, 168, 129, 0.95),
+    rgba(186, 168, 129, 0.72)
+  );
+}
+.quality-art[data-gear-grade="참월 : 의"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(94, 240, 236, 0.95),
+    rgba(94, 240, 236, 0.7)
+  );
+}
+.quality-art[data-gear-grade="결단"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(192, 96, 0, 0.95),
+    rgba(192, 96, 0, 0.7)
+  );
+}
+.quality-art[data-gear-slot="완갑"][data-gear-grade="영웅"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(80, 29, 96, 0.95),
+    rgba(80, 29, 96, 0.7)
+  );
+}
+.quality-art[data-gear-slot="완갑"][data-gear-grade="전설"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(172, 119, 0, 0.95),
+    rgba(172, 119, 0, 0.7)
+  );
+}
+.quality-art[data-gear-slot="완갑"][data-gear-grade="유물"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(192, 96, 0, 0.95),
+    rgba(192, 96, 0, 0.7)
+  );
+}
+.quality-art[data-gear-slot="완갑"][data-gear-grade="고대"] .compact-art {
+  background: linear-gradient(
+    145deg,
+    rgba(186, 168, 129, 0.95),
+    rgba(186, 168, 129, 0.72)
+  );
+}
 .edit-card div {
   min-width: 0;
   flex: 1;
@@ -531,6 +619,8 @@
 }
 .cycle-add select {
   flex: 1;
+  height: 38px;
+  box-sizing: border-box;
   padding: 10px;
   background: #0c1118;
   color: var(--text);
@@ -538,6 +628,50 @@
 }
 .cycle-clear-button {
   flex: 0 0 auto;
+}
+.cycle-action-controls {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 7px;
+}
+.cycle-action-controls button {
+  height: 38px;
+  box-sizing: border-box;
+}
+.cycle-builder-mode-button {
+  position: relative;
+  background: #263246 !important;
+  color: #d5deeb !important;
+}
+.cycle-builder-mode-button::after {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 7px);
+  z-index: 1000;
+  width: max-content;
+  max-width: 240px;
+  padding: 6px 8px;
+  border: 1px solid #3b6b5a;
+  border-radius: 4px;
+  background: #0c1715;
+  box-shadow: 0 6px 18px #0008;
+  color: #d9f6e8;
+  content: attr(data-tooltip);
+  font-size: 9px;
+  line-height: 1.4;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(3px);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  visibility: hidden;
+  white-space: normal;
+}
+.cycle-builder-mode-button:hover::after,
+.cycle-builder-mode-button:focus-visible::after {
+  opacity: 1;
+  transform: translateY(0);
+  visibility: visible;
 }
 .cycle-add button:disabled {
   cursor: not-allowed;
@@ -658,6 +792,35 @@
 .cycle-skill-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.35;
+}
+.cycle-list.count-mode li {
+  grid-template-rows: 48px minmax(18px, auto) 34px;
+  cursor: default;
+}
+.cycle-list.count-mode li:active {
+  cursor: default;
+}
+.cycle-use-count {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 42px;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  color: var(--muted);
+  font-size: 8px;
+  text-align: left;
+}
+.cycle-use-count input {
+  width: 100%;
+  min-width: 0;
+  height: 22px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  background: #0c1118;
+  color: var(--text);
+  font-size: 9px;
+  text-align: center;
 }
 .cycle-skill-remove {
   position: absolute;
