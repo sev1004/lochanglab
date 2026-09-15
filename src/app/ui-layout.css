@@ -1,0 +1,554 @@
+/* Physical CSS lengths: these tokens size boxes, never scale coordinates. */
+:root {
+  --ui-px: 1px;
+  --ui-vw: 1vw;
+  --ui-vh: 1vh;
+  --ui-space-small: 6px;
+  --ui-space-field: 9px;
+  --ui-space-group: 18px;
+  --ui-control-height: 33px;
+  --ui-control-height-large: 57px;
+  --ui-panel-gap-left: 12px;
+  --ui-panel-gap-right: 8px;
+  --ui-cycle-panel-width: 294px;
+  --basic-equipment-section-gap: 8px;
+}
+
+/* 일반 전투 장비는 통합 등급·강화 셀렉트 아래에 품질을 배치한다. */
+.gear-fields {
+  width: 95px;
+  box-sizing: border-box;
+}
+.ark-points strong {
+  font-size: calc(8 * var(--ui-px)) !important;
+  white-space: nowrap;
+}
+.gear-fields:not(.no-quality) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  grid-template-areas:
+    "grade"
+    "quality";
+  row-gap: calc(3 * var(--ui-px));
+}
+.gear-fields:not(.no-quality) > select:first-of-type {
+  grid-area: grade;
+  width: 95px;
+}
+.gear-fields:not(.no-quality) > label {
+  grid-area: quality;
+  justify-self: start;
+  width: 95px;
+  box-sizing: border-box;
+}
+.gear-fields:not(.no-quality) > label input {
+  width: auto;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.gear-fields.no-quality {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "grade"
+    "enhance";
+}
+.gear-fields.no-quality > select {
+  width: 95px;
+  box-sizing: border-box;
+}
+.equipment-section > .gear-bulk-control {
+  margin: 0 0 calc(7 * var(--ui-px));
+}
+.equipment-section > .gear-bulk-control select {
+  width: 95px;
+  flex: 0 0 95px;
+}
+.gear-editor {
+  grid-template-columns: calc(42 * var(--ui-px)) minmax(0, 1fr);
+}
+.gear-editor .quality-art {
+  flex-basis: calc(42 * var(--ui-px));
+}
+.gear-editor .quality-art .compact-art {
+  width: calc(42 * var(--ui-px));
+  height: calc(42 * var(--ui-px));
+}
+@media (min-width: 701px) {
+  .simulator-shell {
+    --ui-px: 1.5px;
+    --ui-vw: 1.5vw;
+    --ui-vh: 1.5vh;
+    font-size: 24px;
+  }
+  .floating-doping-panel {
+    --ui-px: 1.2px;
+    --ui-vw: 1.2vw;
+    --ui-vh: 1.2vh;
+    top: 180px;
+  }
+  .floating-doping-panel.doping-panel-inline {
+    --ui-px: 1.5px;
+    --ui-vw: 1.5vw;
+    --ui-vh: 1.5vh;
+  }
+}
+/* Fixed positions always use viewport coordinates measured from the workspace. */
+.evolution-t1-list .compact-art[data-tooltip]:not(:hover):not(:focus-visible)::after {
+  display: none;
+}
+.floating-cycle-ratio-panel {
+  left: auto;
+}
+@media (min-width: 901px) {
+  .floating-cycle-ratio-panel {
+    width: var(--ui-cycle-panel-width);
+  }
+}
+.floating-cycle-ratio-panel.cycle-panel-inline {
+  position: static;
+  width: auto;
+  margin-bottom: var(--ui-space-group);
+}
+
+/* 아크 패시브와 전투 사이클은 상단 2열, 스킬은 하단 전체 폭으로 배치한다. */
+@media (min-width: 901px) {
+  .sim-content:has(> .cycle-panel) {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--ui-space-group);
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid,
+  .sim-content:has(> .cycle-panel) > .skills-cycle,
+  .sim-content:has(> .cycle-panel) > .cycle-panel {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sim-content:has(> .cycle-panel) > .skills-cycle {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .sim-content:has(> .cycle-panel) > .cycle-panel {
+    grid-column: 2;
+    grid-row: 1;
+    box-sizing: border-box;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-points {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: calc(2 * var(--ui-px));
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-points > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: flex-start;
+    gap: calc(3 * var(--ui-px));
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-points strong {
+    margin-top: 0;
+    font-size: calc(10 * var(--ui-px)) !important;
+  }
+}
+
+@media (min-width: 901px) and (max-width: 1400px) {
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-columns,
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .evolution-tier-stack,
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .evolution-t5-editor .evolution-t1-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-points > div {
+    display: grid;
+    justify-items: center;
+    gap: calc(2 * var(--ui-px));
+  }
+
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid .ark-points strong {
+    width: 100%;
+    text-align: center;
+    font-size: calc(6.5 * var(--ui-px)) !important;
+  }
+}
+/* 좁은 사이클 패널에서는 조작을 위에서 아래로 읽고 각 행의 폭을 공유한다. */
+.sim-content > .cycle-panel {
+  display: grid;
+  align-content: start;
+  grid-auto-rows: max-content;
+  gap: 12px;
+  padding: 16px;
+  border-radius: calc(6 * var(--ui-px));
+  scrollbar-gutter: stable;
+  container-type: inline-size;
+}
+.cycle-panel > .section-heading,
+.cycle-panel > .section-heading h2 {
+  margin: 0;
+}
+.cycle-panel .cycle-add,
+.cycle-panel .cycle-selection-controls,
+.cycle-panel .cycle-duration-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  min-width: 0;
+  gap: 8px;
+  flex: none;
+}
+.cycle-panel .cycle-selection-controls { order: 1; }
+.cycle-panel .cycle-duration-controls {
+  order: 2;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+.cycle-panel .cycle-preset-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.cycle-panel .cycle-add select,
+.cycle-panel .cycle-add button {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin: 0;
+  padding: 0 10px;
+  box-sizing: border-box;
+  font-size: 14px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.cycle-panel .cycle-preset-actions button,
+.cycle-panel .cycle-clear-button {
+  background: #233042;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.cycle-panel .cycle-duration-option {
+  width: 100%;
+  box-sizing: border-box;
+  height: 40px;
+  min-height: 40px;
+  padding: 0 10px;
+  gap: 8px;
+  font-size: 13px;
+}
+.cycle-panel .cycle-duration-option span,
+.cycle-panel .cycle-duration-option strong {
+  white-space: nowrap;
+  font-size: 13px;
+}
+.cycle-panel .cycle-duration-option input[type="number"] {
+  width: 66px;
+  height: 30px;
+  font-size: 13px;
+}
+.cycle-panel .cycle-duration-option input[type="checkbox"],
+.cycle-panel .cycle-builder-mode-option input {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+.cycle-panel .cycle-action-controls {
+  order: 3;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+.cycle-panel .cycle-action-controls > button {
+  order: 2;
+  width: 100%;
+  flex: 1 1 220px;
+  min-width: 0;
+}
+.cycle-panel .cycle-builder-mode-options {
+  order: 0;
+  grid-column: 2;
+  grid-row: 1;
+  height: auto;
+  gap: 6px;
+  transform: none;
+  align-self: center;
+}
+.cycle-panel .cycle-duration-controls > .cycle-clear-button {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  margin: 0;
+  box-sizing: border-box;
+}
+.cycle-panel .cycle-builder-mode-option {
+  min-width: 0;
+  padding: 0;
+  gap: 6px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.cycle-panel > .cycle-list { margin: 0; }
+/* 전투 사이클 카드는 아이콘보다 스킬명·버프 상태를 먼저 읽을 수 있는 밀도로 맞춘다. */
+.cycle-panel .cycle-list {
+  grid-template-columns: repeat(auto-fill, minmax(calc(61 * var(--ui-px)), 1fr));
+  gap: calc(7 * var(--ui-px));
+}
+.cycle-panel .cycle-list li {
+  grid-template-rows: calc(29 * var(--ui-px)) minmax(calc(17 * var(--ui-px)), auto) calc(18 * var(--ui-px));
+  gap: calc(3 * var(--ui-px));
+  padding: calc(6 * var(--ui-px)) calc(5 * var(--ui-px)) calc(5 * var(--ui-px));
+}
+.cycle-panel .cycle-list .compact-art {
+  width: calc(29 * var(--ui-px));
+  height: calc(29 * var(--ui-px));
+  flex-basis: calc(29 * var(--ui-px));
+}
+.cycle-panel .cycle-list.count-mode li {
+  grid-template-rows: calc(29 * var(--ui-px)) minmax(calc(17 * var(--ui-px)), auto) calc(24 * var(--ui-px));
+}
+.cycle-panel .cycle-list .cycle-skill-order,
+.cycle-panel .cycle-list .cycle-skill-remove {
+  width: calc(13 * var(--ui-px));
+  height: calc(13 * var(--ui-px));
+}
+.cycle-panel .cycle-list .cycle-skill-order {
+  font-size: calc(7 * var(--ui-px));
+}
+.cycle-panel .cycle-list .cycle-skill-remove {
+  font-size: calc(9 * var(--ui-px));
+}
+.cycle-panel .cycle-use-count {
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: calc(3 * var(--ui-px));
+  white-space: nowrap;
+}
+.cycle-panel .cycle-list.sequence-mode li.no-cycle-controls {
+  grid-template-rows: calc(29 * var(--ui-px)) minmax(calc(17 * var(--ui-px)), auto);
+}
+.cycle-panel .cycle-skill-buffs button,
+.cycle-panel .cycle-skill-actions button {
+  height: calc(18 * var(--ui-px));
+}
+.cycle-panel .cycle-skill-buffs img {
+  width: calc(14 * var(--ui-px));
+  height: calc(14 * var(--ui-px));
+}
+@media (max-width: 900px) {
+  .cycle-panel .cycle-duration-controls {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cycle-panel .cycle-builder-mode-options {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .cycle-panel .cycle-duration-controls > .cycle-clear-button {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .sim-content:has(> .cycle-panel) {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-space-group);
+  }
+  .sim-content:has(> .cycle-panel) > .equipment-ark-grid { order: 1; }
+  .sim-content:has(> .cycle-panel) > .cycle-panel { order: 2; }
+  .sim-content:has(> .cycle-panel) > .skills-cycle { order: 3; }
+  .sim-content > .cycle-panel {
+    height: auto !important;
+    margin-top: 0;
+  }
+}
+
+.simulation-debug-footer {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+}
+@media (min-width: 701px) and (max-width: 1200px) {
+  .profile-strip {
+    grid-template-columns: calc(48 * var(--ui-px)) minmax(0, 1fr);
+  }
+  .profile-combat-summary {
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .profile-actions {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--ui-space-field);
+  }
+}
+@media (max-width: 600px) {
+  .ark-grid-effect-editor li {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    text-align: center;
+  }
+  .ark-grid-effect-editor li > div {
+    min-width: 0;
+    max-width: 100%;
+  }
+}
+
+/* 기본 장비 탭은 악세사리 우측에 각인을 두고, 그 아래에 아크그리드를 배치한다. */
+@media (min-width: 901px) {
+  .sim-content:has(.equipment-left-stack) {
+    display: grid;
+    grid-template-columns: minmax(0, 0.8fr) minmax(0, 0.94fr) minmax(0, 1.26fr);
+    align-items: start;
+    gap: var(--ui-space-group);
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack,
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .equipment-layout,
+  .sim-content:has(.equipment-left-stack) .equipment-ark-grid {
+    display: contents;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(1) {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(2) {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  /* 전투 장비와 악세서리·팔찌 묶음의 하단선을 각인·아크 그리드 묶음과 맞춘다. */
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(1) > .equipment-section {
+    height: calc(629 * var(--ui-px)) !important;
+    min-height: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(2) {
+    height: calc(629 * var(--ui-px));
+    grid-template-rows: auto minmax(min-content, 1fr);
+    align-content: stretch;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section {
+    grid-column: 3;
+    grid-row: 1;
+    min-width: 0;
+    margin: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .avatar-section {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section {
+    grid-column: 3;
+    grid-row: 1;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-ark-grid > section:last-child {
+    grid-column: 3;
+    grid-row: 2;
+    min-width: 0;
+    /* Grid row 2 is sized by the taller left equipment column; cancel that empty offset. */
+    margin-top: calc(-378.33 * var(--ui-px) + var(--basic-equipment-section-gap));
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-ark-grid > section:last-child .core-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor > div,
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor > .stone-editor {
+    display: grid;
+    grid-template-columns: calc(28 * var(--ui-px)) minmax(0, 1fr);
+    grid-template-rows: calc(22 * var(--ui-px)) calc(22 * var(--ui-px));
+    align-items: center;
+    gap: calc(3 * var(--ui-px)) calc(5 * var(--ui-px));
+    min-width: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor > div .compact-art,
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor > .stone-editor .compact-art {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    justify-self: center;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-card-content {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / -1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-rows: calc(22 * var(--ui-px)) calc(22 * var(--ui-px));
+    gap: calc(3 * var(--ui-px));
+    min-width: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-controls {
+    display: contents;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-controls select:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-controls select:last-child {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-card-content > select {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor select {
+    width: 100% !important;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .stone-row {
+    grid-template-columns: minmax(0, 1fr) calc(32 * var(--ui-px));
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-left-stack > .engraving-section .engraving-editor > .stone-editor .stone-card-content {
+    display: grid;
+    grid-column: 2;
+    grid-row: 1 / -1;
+    gap: calc(3 * var(--ui-px));
+    min-width: 0;
+  }
+
+  .sim-content:has(.equipment-left-stack) .equipment-layout > .equipment-column:nth-child(2) > .equipment-section {
+    min-width: 0;
+    width: 100%;
+    box-sizing: border-box;
+  }
+}

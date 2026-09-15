@@ -108,7 +108,7 @@ import usageComparisonImage from "@/img/usage-guide/06-comparison.png";
 import engravingValues from "@/data/engraving-outgoing-damage.json";
 import enlightenmentSkillEffects from "@/data/enlightenment-skill-effects.json";
 
-const appVersion = packageJson.version;
+const appVersion = packageJson.version.replace(/\.0$/, "");
 
 const FLASH_ORB_CRITICAL_RATE_BY_STAGE: Record<string, number> = {
   "0": 0.174,
@@ -658,8 +658,8 @@ function parseDpsScreenshotSkillRatios(
   return [...ratiosBySkillName.values()];
 }
 
-type MainMenu = "simulation" | "api" | "notice" | "guide";
-type SimulationTab = "기본 장비" | "스킬 & 전투 사이클";
+type MainMenu = "simulation" | "api" | "notice" | "guide" | "bug";
+type SimulationTab = "아크 패시브&사이클" | "기본 장비" | "임시";
 type CycleEntry = {
   id: string;
   skillName: string;
@@ -677,7 +677,11 @@ type CyclePreset = {
     useCount?: number;
   })[];
   guidanceSeconds?: number;
+  manualSeconds?: string;
   builderMode?: CycleBuilderMode;
+};
+type UserCyclePreset = CyclePreset & {
+  createdAt: string;
 };
 type CycleDurationMode = "guideline" | "manual";
 type CycleBuilderMode = "sequence" | "count";
@@ -1029,54 +1033,30 @@ function createCyclePresets(
   hasManaFurnace: boolean,
 ): CyclePreset[] {
   if (classEngraving === "절제") {
-    return shorthand === "222" || shorthand === "232"
-      ? [
-          {
-            id: `jeolje-${shorthand}-count`,
-            label: `절제 ${shorthand} 기본 사이클 (횟수 방식)`,
-            entries: jeolje222CountCycleEntries,
-            guidanceSeconds: 123,
-            builderMode: "count",
-          },
-        ]
-      : [];
+    return ["222", "232"].map((presetShorthand) => ({
+      id: `jeolje-${presetShorthand}-count`,
+      label: `절제 ${presetShorthand} 기본 사이클 (횟수 방식)`,
+      entries: jeolje222CountCycleEntries,
+      guidanceSeconds: 123,
+      builderMode: "count" as const,
+    }));
   }
   if (classEngraving !== "절정") return [];
-  const normalCores = new Set(["113", "111", "122"]);
-  const bluntCores = new Set(["333", "323", "322", "331", "332"]);
-  if (shorthand === "222") {
-    return [
-      {
-        id: "jeoljeong-222",
-        label: "절정 222 기본 사이클 (47개)",
-        entries: jeoljeong222CycleEntries,
-      },
-    ];
-  }
-  if (hasManaFurnace && shorthand === "333") {
-    return [
-      {
-        id: "jeoljeong-mana",
-        label: "절정 333 · 마나 용광로 기본 사이클 (23개)",
-        entries: manaJeoljeongCycleEntries,
-      },
-    ];
-  }
-  if (hasBluntEdge && bluntCores.has(shorthand ?? "")) {
-    return [
-      {
-        id: "jeoljeong-blunt",
-        label: "절정 · 뭉툭한 가시 기본 사이클 (23개)",
-        entries: bluntJeoljeongCycleEntries,
-      },
-    ];
-  }
-  if (!normalCores.has(shorthand ?? "")) return [];
   return [
     {
-      id: "jeoljeong-normal",
-      label: "절정 기본 사이클 (22개)",
-      entries: normalJeoljeongCycleEntries,
+      id: "jeoljeong-222",
+      label: "특치연격 사이클",
+      entries: jeoljeong222CycleEntries,
+    },
+    {
+      id: "jeoljeong-mana",
+      label: "청맹반 사이클(마용)",
+      entries: manaJeoljeongCycleEntries,
+    },
+    {
+      id: "jeoljeong-blunt",
+      label: "청맹적 사이클 (뭉가)",
+      entries: bluntJeoljeongCycleEntries,
     },
   ];
 }
@@ -1375,8 +1355,49 @@ const errors: Record<number, string> = {
   404: "캐릭터를 찾을 수 없습니다.",
   429: "요청 한도를 초과했습니다. 잠시 후 다시 시도해주세요.",
 };
-const simTabs: SimulationTab[] = ["기본 장비", "스킬 & 전투 사이클"];
+const simTabs: SimulationTab[] = [
+  "아크 패시브&사이클",
+  "기본 장비",
+  "임시",
+];
 const siteNotices = [
+  {
+    version: "v1.1",
+    date: "2026.09.16",
+    title: "UI 개편 및 스킬 분석 기능 추가",
+    sections: [
+      {
+        title: "스킬 대미지 분석 그래프 추가",
+        items: [
+          "전체 사이클의 스킬별 평균 대미지를 막대그래프로 확인할 수 있습니다.",
+          "현재 세팅과 비교군 세팅의 스킬별 평균 대미지를 함께 비교할 수 있습니다.",
+          "현재 세팅의 스킬별 딜지분을 원형 그래프로 확인할 수 있습니다.",
+        ],
+      },
+      {
+        title: "스킬 프리셋 기능 추가",
+        items: [
+          "현재 구성한 스킬과 전투 사이클을 사용자 프리셋으로 저장할 수 있습니다.",
+          "저장한 프리셋을 불러오거나 삭제할 수 있습니다.",
+          "기존 세팅별 기본 사이클 자동 선택 기능은 그대로 유지됩니다.",
+        ],
+      },
+      {
+        title: "시뮬레이터 UI 개편",
+        items: [
+          "편집 영역을 아크 패시브&사이클, 기본 장비 탭으로 재구성했습니다.",
+          "트라이포드, 보석, 스킬 전투 정보를 한 카드에서 확인할 수 있도록 정리했습니다.",
+          "PC 및 모바일 환경의 정렬과 반응형 배치를 개선했습니다.",
+        ],
+      },
+      {
+        title: "기본 장비 편집 개선",
+        items: [
+          "전투 장비, 악세사리, 팔찌, 각인, 아크 그리드 영역의 배치를 정리했습니다.",
+        ],
+      },
+    ],
+  },
   {
     version: "v1.0.0",
     date: "2026.09.07",
@@ -1452,6 +1473,7 @@ const sortedSiteNotices = [...siteNotices].sort((left, right) => {
   return 0;
 });
 const SAVED_SETTINGS_KEY = "glavier-dps-simulator:saved-settings";
+const USER_CYCLE_PRESETS_KEY = "glavier-dps-simulator:user-cycle-presets";
 const API_KEY_STORAGE_KEY = "glavier-dps-simulator:lostark-api-key";
 const gearGrades = ["결단", "전율"] as const;
 const esterWeaponGrades = ["참월 : 의"] as const;
@@ -1714,6 +1736,7 @@ const gridCoreOptions = [
   ["없음", "공격", "무기", "구원", "생명", "속도", "방어"],
 ];
 const gridPoints = [20, 19, 18, 17, 14, 10];
+const arkGridCoreDisplayOrder = [0, 3, 1, 4, 2, 5] as const;
 
 function errorMessage(error: unknown) {
   if (error instanceof LostArkApiError)
@@ -1793,6 +1816,12 @@ function optionChoices(slot: string, current: string, catalog: string[]) {
     ]),
   ];
 }
+function accessoryOptionLabel(option: string) {
+  return option
+    .replaceAll("적에게 주는 피해", "적주피")
+    .replaceAll("무기 공격력", "무공")
+    .replaceAll("치명타 적중률", "치확");
+}
 function isArkPassivePointOption(option: string) {
   return /^(진화|깨달음|도약)\s*\+?\s*\d+/.test(option.trim());
 }
@@ -1812,11 +1841,34 @@ function GearEditor({
 }) {
   const isArmGauntlet = item.slot === "완갑";
   const isEsterWeapon = item.slot === "무기";
-  const grades: string[] = isArmGauntlet
-    ? [...armGauntletGrades]
-    : isEsterWeapon
-      ? [...gearGrades, ...esterWeaponGrades]
-      : [...gearGrades];
+  const combinedGearOptions = [
+    ...(isEsterWeapon
+      ? esterWeaponEnhancementLevels.map((level) => ({
+          value: `참월 : 의:${level}`,
+          label: `참월 +${level}`,
+          grade: "참월 : 의" as const,
+          enhancement: level,
+        }))
+      : []),
+    ...enhancementLevels.map((level) => ({
+      value: `전율:${level}`,
+      label: `전율 +${level}`,
+      grade: "전율" as const,
+      enhancement: level,
+    })),
+  ];
+  const selectedCombinedGearOption =
+    combinedGearOptions.find(
+      (option) =>
+        option.grade === item.simulationGrade &&
+        option.enhancement === (item.enhancement ?? 10),
+    ) ??
+    combinedGearOptions.find(
+      (option) =>
+        option.grade === "전율" &&
+        option.enhancement === (item.enhancement ?? 10),
+    ) ??
+    combinedGearOptions[0];
   const selectableEnhancements = isArmGauntlet
     ? (gauntletLevelRange[item.simulationGrade] ?? gauntletEnhancementLevels)
     : item.simulationGrade === "참월 : 의"
@@ -1837,38 +1889,53 @@ function GearEditor({
         ) : null}
       </div>
       <div className={`gear-fields${isArmGauntlet ? " no-quality" : ""}`}>
-        <select
-          aria-label={`${item.slot} 장비 종류`}
-          value={
-            isArmGauntlet
-              ? armGauntletGrades.includes(
+        {isArmGauntlet ? (
+          <select
+            aria-label={`${item.slot} 장비 종류`}
+            value={
+              armGauntletGrades.includes(
                 item.simulationGrade as (typeof armGauntletGrades)[number],
               )
                 ? item.simulationGrade
                 : "영웅"
-              : grades.includes(
-                    item.simulationGrade as (typeof gearGrades)[number],
-                  )
-                ? item.simulationGrade
-                : "전율"
-          }
-          onChange={(event) => {
-            const grade = event.target
-              .value as EquipmentProfile["simulationGrade"];
-            onChange({
-              simulationGrade: grade,
-              ...(isArmGauntlet
-                ? { enhancement: gauntletLevelRange[grade]?.[0] ?? 0 }
-                : grade === "참월 : 의"
-                  ? { enhancement: 10 }
-                : {}),
-            });
-          }}
-        >
-          {grades.map((grade) => (
-            <option key={grade}>{grade}</option>
-          ))}
-        </select>
+            }
+            onChange={(event) => {
+              const grade = event.target
+                .value as EquipmentProfile["simulationGrade"];
+              onChange({
+                simulationGrade: grade,
+                enhancement: gauntletLevelRange[grade]?.[0] ?? 0,
+              });
+            }}
+          >
+            {armGauntletGrades.map((grade) => (
+              <option key={grade}>{grade}</option>
+            ))}
+          </select>
+        ) : (
+          <select
+            className="gear-combined-select"
+            aria-label={`${item.slot} 등급 및 강화`}
+            value={selectedCombinedGearOption.value}
+            onChange={(event) => {
+              const option = combinedGearOptions.find(
+                (candidate) => candidate.value === event.target.value,
+              );
+              if (option) {
+                onChange({
+                  simulationGrade: option.grade,
+                  enhancement: option.enhancement,
+                });
+              }
+            }}
+          >
+            {combinedGearOptions.map((option) => (
+              <option value={option.value} key={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        )}
         {!isArmGauntlet ? (
           <label>
             품질
@@ -1889,19 +1956,21 @@ function GearEditor({
             />
           </label>
         ) : null}
-        <select
-          aria-label={`${item.slot} 강화`}
-          value={item.enhancement ?? 10}
-          onChange={(event) =>
-            onChange({ enhancement: Number(event.target.value) })
-          }
-        >
-          {selectableEnhancements.map((level) => (
-            <option value={level} key={level}>
-              +{level}
-            </option>
-          ))}
-        </select>
+        {isArmGauntlet ? (
+          <select
+            aria-label={`${item.slot} 강화`}
+            value={item.enhancement ?? 10}
+            onChange={(event) =>
+              onChange({ enhancement: Number(event.target.value) })
+            }
+          >
+            {selectableEnhancements.map((level) => (
+              <option value={level} key={level}>
+                +{level}
+              </option>
+            ))}
+          </select>
+        ) : null}
       </div>
     </article>
   );
@@ -2182,7 +2251,7 @@ function AccessoryEditor({
             >
               {choices.map((value) => (
                 <option value={value} key={value}>
-                  {value}
+                  {accessoryOptionLabel(value)}
                 </option>
               ))}
             </select>
@@ -2506,15 +2575,6 @@ function SkillEditorV2({
   const catalog =
     GLAVIER_SKILL_TRIPODS[skill.name as keyof typeof GLAVIER_SKILL_TRIPODS];
   const details = GLAVIER_SKILL_TRIPOD_DETAILS[skill.name] ?? [];
-  const criticalRateBonus = calculation.selectedTripods
-    .filter((effect) => effect.effectType === "치명타 확률 가산")
-    .reduce((total, effect) => total + (effect.percentValue ?? 0), 0);
-  const criticalDamageBonus = calculation.selectedTripods
-    .filter((effect) => effect.effectType === "치명타 피해 가산")
-    .reduce((total, effect) => total + (effect.percentValue ?? 0), 0);
-  const cooldownReduction = cooldown
-    ? Math.max(0, cooldown.baseCooldownSeconds - cooldown.cooldownSeconds)
-    : 0;
   const criticalRate = calculation.combat.stages.criticalRate;
   const isBackAttackSkill = calculation.evolution.isBackAttackSkill;
   const defaultScenario = calculation.scenarios.find(
@@ -2550,7 +2610,30 @@ function SkillEditorV2({
   return (
     <article className="skill-card skill-editor">
       <div className="skill-icon-column">
-        <Artwork icon={skill.icon} label="✦" />
+        <div
+          className="skill-icon-tooltip"
+          tabIndex={0}
+          data-tooltip={`트라이포드 배율 ×${(
+            calculation.tripodDamageMultiplier * calculation.awakeningDamageMultiplier
+          ).toFixed(3)} · 치명타 확률 +${(
+            calculation.selectedTripods
+              .filter((effect) => effect.effectType === "치명타 확률 가산")
+              .reduce((total, effect) => total + (effect.percentValue ?? 0), 0) *
+              100 +
+            calculation.awakeningCriticalRateBonus * 100
+          ).toFixed(1)}% · 치명타 피해 +${(
+            calculation.selectedTripods
+              .filter((effect) => effect.effectType === "치명타 피해 가산")
+              .reduce((total, effect) => total + (effect.percentValue ?? 0), 0) *
+            100
+          ).toFixed(1)}% · 쿨타임 감소 ${(
+            cooldown
+              ? Math.max(0, cooldown.baseCooldownSeconds - cooldown.cooldownSeconds)
+              : 0
+          ).toFixed(1)}초`}
+        >
+          <Artwork icon={skill.icon} label="✦" />
+        </div>
         <select
           className="skill-level-select"
           aria-label={`${skill.name} 레벨`}
@@ -2578,30 +2661,7 @@ function SkillEditorV2({
         </select>
       </div>
       <div className="skill-title-column">
-        <div className="skill-title-column">
-          <strong className="skill-name">{skill.name}</strong>
-          <span className="skill-tripod-multiplier">
-            트라이포드 배율 ×
-            {(
-              calculation.tripodDamageMultiplier *
-              calculation.awakeningDamageMultiplier
-            ).toFixed(3)}
-          </span>
-          <span className="skill-tripod-effect">
-            치명타 확률 +
-            {(
-              (criticalRateBonus + calculation.awakeningCriticalRateBonus) *
-              100
-            ).toFixed(1)}
-            %
-          </span>
-          <span className="skill-tripod-effect">
-            치명타 피해 +{(criticalDamageBonus * 100).toFixed(1)}%
-          </span>
-          <span className="skill-tripod-effect">
-            쿨타임 감소 {cooldownReduction.toFixed(1)}초
-          </span>
-        </div>
+        <strong className="skill-name">{skill.name}</strong>
       </div>
       <div className="skill-tripod-selects">
         {activeTripods.map((tripod, index) => {
@@ -2651,18 +2711,21 @@ function SkillEditorV2({
           const gem = gems.find((candidate) => candidate.type === type);
           return gem ? (
             <div className="skill-gem-slot" key={gem.id}>
-              <Artwork icon={gemDisplayIcon(gem)} label="◆" />
-              <select
-                aria-label={`${type} 보석 종류`}
-                value={gem.type}
-                onChange={(event) =>
-                  onGemChange(gem.id, { type: event.target.value })
-                }
+              <button
+                type="button"
+                className="skill-gem-art-button"
+                onClick={(event) => {
+                  const levelSelect =
+                    event.currentTarget.parentElement?.querySelector<HTMLSelectElement>(
+                      "select",
+                    );
+                  levelSelect?.focus();
+                  levelSelect?.click();
+                }}
+                aria-label={`${type} 보석 레벨 변경`}
               >
-                {gemTypes.map((gemType) => (
-                  <option key={gemType}>{gemType}</option>
-                ))}
-              </select>
+                <Artwork icon={gemDisplayIcon(gem)} label="◆" />
+              </button>
               <select
                 aria-label={`${type} 보석 레벨`}
                 value={gem.level ?? 10}
@@ -2672,7 +2735,7 @@ function SkillEditorV2({
               >
                 {gemLevels.map((level) => (
                   <option value={level} key={level}>
-                    {level}
+                    Lv.{level}
                   </option>
                 ))}
               </select>
@@ -2692,52 +2755,24 @@ function SkillEditorV2({
               key={`gem-add-${type}`}
               onClick={() => onAddGem(type as "겁화" | "작열")}
             >
-              {type} 보석 추가
+              {type} 추가
             </button>
           );
         })}
       </div>
       <div className="skill-metrics" aria-label={`${skill.name} 전투 데이터`}>
-        <div className="skill-core-metrics">
-          <span>
-            스킬 쿨타임{" "}
-            <b>{cooldown ? `${cooldown.cooldownSeconds.toFixed(2)}초` : "-"}</b>
-          </span>
-          <span>
-            <span
-              className="skill-metric-tooltip"
-              data-tooltip="백어택 기준 치명타 확률"
-            >
-              치명타 확률
-            </span>{" "}
-            <b>
-              {(
-                (backAttackDisplayScenario?.criticalRate ?? criticalRate) * 100
-              ).toFixed(2)}
-              %
-            </b>
-          </span>
-          <span>
-            최대 대미지{" "}
-            <b>
-              {formatDamageInEok(
-                backAttackDisplayScenario?.maximumDamage ??
-                  calculation.maximumCriticalDamage,
-                3,
-              )}
-            </b>
-          </span>
-          <span>
-            평균 대미지{" "}
-            <b>
-              {formatDamageInEok(
-                backAttackDisplayScenario?.averageDamage ??
-                  calculation.expectedDamage,
-                3,
-              )}
-            </b>
-          </span>
-        </div>
+        <span>
+          스킬 쿨타임 <b>{cooldown ? `${cooldown.cooldownSeconds.toFixed(2)}초` : "-"}</b>
+        </span>
+        <span>
+          치명타 확률 <b>{((backAttackDisplayScenario?.criticalRate ?? criticalRate) * 100).toFixed(2)}%</b>
+        </span>
+        <span>
+          최대 대미지 <b>{formatDamageInEok(backAttackDisplayScenario?.maximumDamage ?? calculation.maximumCriticalDamage, 2)}</b>
+        </span>
+        <span>
+          평균 대미지 <b>{formatDamageInEok(backAttackDisplayScenario?.averageDamage ?? calculation.expectedDamage, 2)}</b>
+        </span>
       </div>
     </article>
   );
@@ -2766,7 +2801,7 @@ function EffectList({
       visibleNames.some((name) => effect.name.includes(name)),
   );
   return (
-    <ul className="effect-list ark-grid-effect-editor">
+    <ul className="effect-list ark-grid-effect-editor no-icons">
       {visibleEffects.map((effect) => {
         const level = effect.level ?? 0;
         const name =
@@ -2780,12 +2815,6 @@ function EffectList({
               : "attack";
         return (
           <li key={effect.id}>
-            <Artwork
-              icon={effect.icon}
-              label="✦"
-              className="ark-grid-effect-art"
-              dataArkGrade={effect.grade ?? ""}
-            />
             <div>
               <strong>{name}</strong>
               <small>젬 효율 {arkGridGemPercent(kind, level)}</small>
@@ -3936,7 +3965,6 @@ function NoticePage() {
   return (
     <section className="workspace information-workspace">
       <div className="workspace-title">
-        <span>04</span>
         <div>
           <h1>공지사항</h1>
           <p>서비스 공지와 업데이트 내역을 확인할 수 있습니다.</p>
@@ -4074,6 +4102,40 @@ function UsagePage() {
   );
 }
 
+function BugReportPage() {
+  return (
+    <section className="workspace information-workspace">
+      <div className="workspace-title">
+        <div>
+          <h1>버그 제보</h1>
+          <p>사용 중 발견한 문제나 개선 의견을 디스코드로 보내주세요.</p>
+        </div>
+      </div>
+      <div className="notice-list">
+        <article className="notice-card">
+          <div className="notice-card-heading">
+            <div className="notice-version-title">
+              <h2>버그 문의 및 개선안 제안</h2>
+            </div>
+          </div>
+          <p>
+            아래 디스코드 서버에 입장한 뒤 버그 문의 및 개선안 제안 채널에
+            내용을 작성해주세요.
+          </p>
+          <a
+            className="bug-report-link"
+            href="https://discord.gg/PZruB6gyPk"
+            target="_blank"
+            rel="noreferrer"
+          >
+            디스코드에서 제보하기
+          </a>
+        </article>
+      </div>
+    </section>
+  );
+}
+
 export default function Home() {
   const [supportRageBuff, setSupportRageBuff] = useState(true);
   const [banquetBuff, setBanquetBuff] = useState(true);
@@ -4090,7 +4152,7 @@ export default function Home() {
   const [flashOrbUptime, setFlashOrbUptime] = useState("36.41");
   const [dopingPanelLeft, setDopingPanelLeft] = useState<number | null>(null);
   const [menu, setMenu] = useState<MainMenu>("simulation");
-  const [tab, setTab] = useState<SimulationTab>("기본 장비");
+  const [tab, setTab] = useState<SimulationTab>("아크 패시브&사이클");
   const [apiKey, setApiKey] = useState("");
   const [rememberApiKey, setRememberApiKey] = useState(false);
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
@@ -4111,13 +4173,19 @@ export default function Home() {
   >(null);
   const [cycleSkill, setCycleSkill] = useState("");
   const [cyclePresetId, setCyclePresetId] = useState("");
+  const [userCyclePresets, setUserCyclePresets] = useState<UserCyclePreset[]>(
+    [],
+  );
   const automaticCycleKeyRef = useRef<string | null>(null);
   const manualCycleEditRef = useRef(false);
   const restoreSavedCycleRef = useRef(false);
   const simulationWorkspaceRef = useRef<HTMLElement | null>(null);
+  const arkPassivePanelRef = useRef<HTMLDivElement | null>(null);
+  const cycleBuilderPanelRef = useRef<HTMLElement | null>(null);
   const dopingPanelRef = useRef<HTMLElement | null>(null);
   const dopingInlineRef = useRef<HTMLDivElement | null>(null);
   const [dopingInline, setDopingInline] = useState(false);
+  const [cyclePanelLeft, setCyclePanelLeft] = useState<number | null>(null);
   const dpsScreenshotInputRef = useRef<HTMLInputElement>(null);
   const [dpsScreenshotStatus, setDpsScreenshotStatus] = useState("");
   const [dpsScreenshotPreview, setDpsScreenshotPreview] = useState<
@@ -4413,6 +4481,54 @@ export default function Home() {
     return skills;
   }, []);
   useEffect(() => {
+    try {
+      const saved = localStorage.getItem(USER_CYCLE_PRESETS_KEY);
+      if (!saved) return;
+      const parsed: unknown = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return;
+      const valid = parsed.filter(
+        (preset: unknown): preset is UserCyclePreset => {
+          if (typeof preset !== "object" || preset === null) return false;
+          const candidate = preset as {
+            id?: unknown;
+            label?: unknown;
+            entries?: unknown;
+          };
+          return (
+            typeof candidate.id === "string" &&
+            typeof candidate.label === "string" &&
+            Array.isArray(candidate.entries) &&
+            candidate.entries.every((entry: unknown) => {
+              if (typeof entry !== "object" || entry === null) return false;
+              const item = entry as Record<string, unknown>;
+              return (
+                typeof item.skillName === "string" &&
+                typeof item.azureDragon === "boolean" &&
+                typeof item.yeongaSimGong === "boolean"
+              );
+            })
+          );
+        },
+      );
+      setUserCyclePresets(valid);
+    } catch {
+      /* 사용자 프리셋 복원 실패는 무시한다. */
+    }
+  }, []);
+  useEffect(() => {
+    const arkPanel = arkPassivePanelRef.current;
+    const cyclePanel = cycleBuilderPanelRef.current;
+    if (!arkPanel || !cyclePanel || tab !== "아크 패시브&사이클") return;
+
+    const syncHeight = () => {
+      cyclePanel.style.height = `${arkPanel.getBoundingClientRect().height}px`;
+    };
+    syncHeight();
+    const observer = new ResizeObserver(syncHeight);
+    observer.observe(arkPanel);
+    return () => observer.disconnect();
+  }, [tab, character, visibleSkillIds.length, cycle.length]);
+  useEffect(() => {
     const workspace = simulationWorkspaceRef.current;
     const panel = dopingPanelRef.current;
     if (!workspace || !panel) {
@@ -4424,14 +4540,24 @@ export default function Home() {
       cancelAnimationFrame(animationFrame);
       animationFrame = requestAnimationFrame(() => {
         const workspaceRect = workspace.getBoundingClientRect();
-        const panelRect = panel.getBoundingClientRect();
-        const needsInline = workspaceRect.left < panelRect.width;
+        const tokens = getComputedStyle(document.documentElement);
+        const leftGap = parseFloat(tokens.getPropertyValue("--ui-panel-gap-left"));
+        const rightGap = parseFloat(tokens.getPropertyValue("--ui-panel-gap-right"));
+        const dopingWidth = window.innerWidth > 700 ? 175.2 : 146;
+        const needsInline = window.innerWidth <= 700 || workspaceRect.left < dopingWidth + leftGap;
         setDopingInline(needsInline);
+        const rightWidth = parseFloat(tokens.getPropertyValue("--ui-cycle-panel-width"));
+        setCyclePanelLeft(
+          window.innerWidth > 900 &&
+          document.documentElement.clientWidth - workspaceRect.right >= rightWidth + rightGap
+            ? workspaceRect.right + rightGap
+            : null,
+        );
         if (needsInline) return;
         // 본문 카드 외곽선과 도핑 패널 사이에 눈에 보이는 여백을 유지한다.
         const nextLeft = Math.max(
           0,
-          workspaceRect.left - panelRect.width - 12,
+          workspaceRect.left - dopingWidth - leftGap,
         );
         setDopingPanelLeft(nextLeft);
       });
@@ -4514,26 +4640,45 @@ export default function Home() {
           bracelet: character.equipment.find((item) => item.slot === "팔찌"),
         }) * 100
       : 0;
+  const hasBluntEdge = character?.arkPassive.evolution.some(
+    (effect) => effect.name === "뭉툭한 가시" && (effect.level ?? 0) > 0,
+  ) ?? false;
+  const hasManaFurnace = character?.arkPassive.evolution.some(
+    (effect) => effect.name === "마나 용광로" && (effect.level ?? 0) > 0,
+  ) ?? false;
   const cyclePresets = createCyclePresets(
     classEngraving,
     arkGridShorthand,
-    character?.arkPassive.evolution.some(
-      (effect) => effect.name === "뭉툭한 가시" && (effect.level ?? 0) > 0,
-    ) ?? false,
-    character?.arkPassive.evolution.some(
-      (effect) => effect.name === "마나 용광로" && (effect.level ?? 0) > 0,
-    ) ?? false,
+    hasBluntEdge,
+    hasManaFurnace,
   );
-  const automaticCyclePreset = cyclePresets[0] ?? null;
+  const automaticCyclePreset =
+    classEngraving === "절제"
+      ? cyclePresets.find((preset) => preset.id === `jeolje-${arkGridShorthand}-count`) ?? null
+      : classEngraving === "절정"
+        ? cyclePresets.find(
+            (preset) =>
+              (arkGridShorthand === "222" && preset.id === "jeoljeong-222") ||
+              (hasManaFurnace && arkGridShorthand === "333" && preset.id === "jeoljeong-mana") ||
+              (hasBluntEdge && preset.id === "jeoljeong-blunt") ||
+              (!hasBluntEdge && ["113", "111", "122"].includes(arkGridShorthand ?? "") && preset.id === "jeoljeong-blunt"),
+          ) ?? null
+        : null;
+  const availableCyclePresets: CyclePreset[] = [
+    ...cyclePresets,
+    ...userCyclePresets,
+  ];
   const automaticCycleKey = character
     ? [
         character.name,
         classEngraving ?? "",
         arkGridShorthand ?? "",
+        hasManaFurnace ? "mana" : "no-mana",
+        hasBluntEdge ? "blunt" : "no-blunt",
         automaticCyclePreset?.id ?? "",
       ].join("|")
     : null;
-  const selectedCyclePreset = cyclePresets.find(
+  const selectedCyclePreset = availableCyclePresets.find(
     (preset) => preset.id === cyclePresetId,
   );
   const azureDragonCycleIcon =
@@ -4829,7 +4974,7 @@ export default function Home() {
       automaticCycleKeyRef.current = automaticCycleKey;
       return;
     }
-    const preset = cyclePresets[0] ?? null;
+    const preset = automaticCyclePreset;
     if (automaticCycleKeyRef.current === automaticCycleKey) {
       return;
     } else {
@@ -5592,6 +5737,63 @@ export default function Home() {
     setAllCycleCooldown(checked);
   }
 
+  function saveCurrentCyclePreset() {
+    if (!character || cycle.length === 0) {
+      setMessage("저장할 스킬 사이클을 먼저 구성해주세요.");
+      return;
+    }
+    const name = window.prompt("스킬 프리셋 이름을 입력하세요.");
+    if (!name?.trim()) return;
+    const preset: UserCyclePreset = {
+      id: `user-cycle-${crypto.randomUUID()}`,
+      label: name.trim(),
+      entries: cycle.map(({ id: _id, ...entry }) => ({ ...entry })),
+      builderMode: cycleBuilderMode,
+      guidanceSeconds:
+        cycleDurationMode === "guideline" && cycleSeconds > 0
+          ? cycleSeconds
+          : undefined,
+      manualSeconds:
+        cycleDurationMode === "manual" ? manualCycleSeconds : undefined,
+      createdAt: new Date().toISOString(),
+    };
+    const existing = userCyclePresets.find(
+      (candidate) => candidate.label === preset.label,
+    );
+    const next = existing
+      ? userCyclePresets.map((candidate) =>
+          candidate.id === existing.id ? { ...preset, id: existing.id } : candidate,
+        )
+      : [...userCyclePresets, preset];
+    try {
+      localStorage.setItem(USER_CYCLE_PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      setMessage("스킬 프리셋을 저장하지 못했습니다. 브라우저 저장 공간을 확인해주세요.");
+      return;
+    }
+    setUserCyclePresets(next);
+    setCyclePresetId(existing?.id ?? preset.id);
+    setMessage(
+      `'${preset.label}' 스킬 프리셋을 ${existing ? "덮어써서 저장했습니다." : "저장했습니다."}`,
+    );
+  }
+
+  function deleteSelectedCyclePreset() {
+    const preset = userCyclePresets.find((item) => item.id === cyclePresetId);
+    if (!preset) return;
+    if (!window.confirm(`'${preset.label}' 스킬 프리셋을 삭제할까요?`)) return;
+    const next = userCyclePresets.filter((item) => item.id !== preset.id);
+    try {
+      localStorage.setItem(USER_CYCLE_PRESETS_KEY, JSON.stringify(next));
+    } catch {
+      setMessage("스킬 프리셋을 삭제하지 못했습니다. 브라우저 저장 공간을 확인해주세요.");
+      return;
+    }
+    setUserCyclePresets(next);
+    setCyclePresetId("");
+    setMessage(`'${preset.label}' 스킬 프리셋을 삭제했습니다.`);
+  }
+
   function currentSettingSnapshot(): SavedSettingSnapshot | null {
     if (!character) return null;
     return JSON.parse(
@@ -5742,7 +5944,7 @@ export default function Home() {
     setFlashOrbEnabled(snapshot.flashOrbEnabled ?? false);
     setFlashOrbStage(snapshot.flashOrbStage ?? "0");
     setFlashOrbUptime(snapshot.flashOrbUptime ?? "36.41");
-    setTab("기본 장비");
+    setTab("아크 패시브&사이클");
     setMenu("simulation");
     setMessage(`'${setting.name}' 세팅을 불러왔습니다.`);
   }
@@ -5763,6 +5965,7 @@ export default function Home() {
             ["api", "API 설정"],
             ["notice", "공지사항"],
             ["guide", "사용법"],
+            ["bug", "버그 제보"],
           ].map(([id, label]) => (
             <button
               type="button"
@@ -5793,6 +5996,8 @@ export default function Home() {
         <NoticePage />
       ) : menu === "guide" ? (
         <UsagePage />
+      ) : menu === "bug" ? (
+        <BugReportPage />
       ) : menu === "api" ? (
         <section className="workspace api-workspace">
           <div className="workspace-title">
@@ -5989,6 +6194,143 @@ export default function Home() {
                   ) : null}
                 </div>
               </div>
+              <section className="profile-skill-damage-chart" aria-label="스킬별 딜량">
+                <div className="profile-skill-damage-chart-heading">
+                  <strong>전체 사이클 스킬별 평균 딜량</strong>
+                  <small>딜지분 3% 이상</small>
+                </div>
+                {(() => {
+                  const chartSkills = currentComparisonSummary
+                    ? [
+                        ...currentComparisonSummary.skills,
+                        ...(comparisonTargetSummary?.skills.filter(
+                          (targetSkill) =>
+                            targetSkill.damageShare >= 3 &&
+                            !currentComparisonSummary.skills.some(
+                              (skill) => skill.skillName === targetSkill.skillName,
+                            ),
+                        ) ?? []),
+                      ]
+                        .filter((skill) => {
+                          const targetSkill = comparisonTargetSummary?.skills.find(
+                            (candidate) => candidate.skillName === skill.skillName,
+                          );
+                          return skill.damageShare >= 3 || (targetSkill?.damageShare ?? 0) >= 3;
+                        })
+                        .sort((left, right) => right.damageShare - left.damageShare)
+                        .map((skill) => ({
+                          ...skill,
+                          targetShare:
+                            comparisonTargetSummary?.skills.find(
+                              (targetSkill) => targetSkill.skillName === skill.skillName,
+                            )?.damageShare,
+                          targetAverageDamage:
+                            comparisonTargetSummary?.skills.find(
+                              (targetSkill) => targetSkill.skillName === skill.skillName,
+                            )?.averageDamage,
+                        }))
+                    : [];
+                  const chartMax = Math.max(
+                    ...chartSkills.flatMap((skill) => [skill.averageDamage, skill.targetAverageDamage ?? 0]),
+                    0,
+                  );
+                  return chartSkills.length ? (
+                    <div className="profile-skill-damage-chart-list">
+                      {chartSkills.map((skill, index) => (
+                        <div
+                          className="profile-skill-damage-column"
+                          key={skill.skillName}
+                          onMouseMove={(event) => {
+                            event.currentTarget.style.setProperty(
+                              "--skill-tooltip-x",
+                              `${event.clientX}px`,
+                            );
+                            event.currentTarget.style.setProperty(
+                              "--skill-tooltip-y",
+                              `${event.clientY}px`,
+                            );
+                          }}
+                          data-tooltip={`현재: ${formatDamageInEok(skill.averageDamage, 2)}\n비교군: ${skill.targetAverageDamage === undefined ? "미사용" : formatDamageInEok(skill.targetAverageDamage, 2)}`}
+                        >
+                          <div className="profile-skill-damage-bars">
+                            {index === 0 ? (
+                              <div className="profile-skill-damage-axis" aria-hidden="true">
+                                {[1, 0.75, 0.5, 0.25].map((ratio) => (
+                                  <span key={ratio} style={{ bottom: `${ratio * 100}%` }}>
+                                    {formatDamageInEok(chartMax * ratio, 2)}
+                                  </span>
+                                ))}
+                              </div>
+                            ) : null}
+                            <i
+                              className="current"
+                              style={{ height: `${(skill.averageDamage / chartMax) * 100}%` }}
+                              title={`현재 세팅 ${skill.damageShare.toFixed(2)}%`}
+                            />
+                            {skill.targetShare !== undefined ? (
+                              <i
+                                className="target"
+                                style={{ height: `${((skill.targetAverageDamage ?? 0) / chartMax) * 100}%` }}
+                                title={`B군 ${skill.targetShare.toFixed(2)}%`}
+                              />
+                            ) : null}
+                          </div>
+                          <span>{skill.skillName}</span>
+                          <b>{formatDamageInEok(skill.averageDamage, 2)}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <small className="profile-skill-damage-empty">계산 후 딜지분 3% 이상 스킬이 표시됩니다.</small>
+                  );
+                })()}
+                {(() => {
+                  const pieSkills = currentComparisonSummary?.skills.filter(
+                    (skill) => skill.damageShare >= 1,
+                  ) ?? [];
+                  const colors = [
+                    "#F04B4B",
+                    "#F28C28",
+                    "#F2C94C",
+                    "#43B86B",
+                    "#4A90E2",
+                    "#4654A3",
+                    "#9B6DCC",
+                    "#35B7B0",
+                    "#E878A6",
+                    "#A8754F",
+                  ];
+                  let offset = 0;
+                  const stops = pieSkills.map((skill, index) => {
+                    const start = offset;
+                    offset += skill.damageShare;
+                    return `${colors[index % colors.length]} ${start}% ${offset}%`;
+                  });
+                  return (
+                    <div className="profile-skill-damage-pie" aria-label="현재 세팅 딜지분 원형 그래프">
+                      {pieSkills.length ? (
+                        <div className="profile-skill-damage-pie-content">
+                          <div
+                            className="profile-skill-damage-pie-chart"
+                            style={{ background: `conic-gradient(${stops.join(", ")})` }}
+                            aria-hidden="true"
+                          />
+                          <div className="profile-skill-damage-pie-legend">
+                            {pieSkills.map((skill, index) => (
+                              <span key={skill.skillName}>
+                                <i style={{ background: colors[index % colors.length] }} />
+                                {skill.skillName} {skill.damageShare.toFixed(2)}%
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <small>계산 후 표시됩니다.</small>
+                      )}
+                    </div>
+                  );
+                })()}
+              </section>
               <section className="profile-setting-comparison" aria-label="세팅 비교">
                 <div className="profile-setting-comparison-heading">
                   <strong>세팅 비교</strong>
@@ -6057,85 +6399,56 @@ export default function Home() {
                       })}
                     </div>
                     <div className="comparison-skill-section">
-                      <strong>스킬별 딜지분 3% 이상</strong>
+                      <strong>스킬별 비교 (딜지분 제외)</strong>
                       <div className="comparison-skill-list">
-                        {(() => {
-                          const comparisonSkills = [
-                            ...currentComparisonSummary.skills,
-                            ...comparisonTargetSummary.skills.filter(
-                              (targetSkill) =>
-                                !currentComparisonSummary.skills.some(
-                                  (skill) => skill.skillName === targetSkill.skillName,
-                                ),
-                            ),
-                          ]
-                            .filter((skill) => {
-                              const targetSkill = comparisonTargetSummary.skills.find(
-                                (candidate) => candidate.skillName === skill.skillName,
-                              );
-                              return skill.damageShare >= 3 || (targetSkill?.damageShare ?? 0) >= 3;
-                            })
-                            .sort((a, b) => {
-                              const currentA = currentComparisonSummary.skills.find(
-                                (skill) => skill.skillName === a.skillName,
-                              );
-                              const currentB = currentComparisonSummary.skills.find(
-                                (skill) => skill.skillName === b.skillName,
-                              );
-                              return (currentB?.damageShare ?? 0) - (currentA?.damageShare ?? 0);
-                            });
-                          return comparisonSkills.length ? comparisonSkills.map((skill) => (
-                          (() => {
-                            const currentSkill = currentComparisonSummary.skills.find(
+                        {currentComparisonSummary.skills
+                          .filter((skill) => skill.damageShare >= 3)
+                          .map((skill) => {
+                            const target = comparisonTargetSummary.skills.find(
                               (candidate) => candidate.skillName === skill.skillName,
                             );
-                            const targetSkill = comparisonTargetSummary.skills.find(
-                              (candidate) => candidate.skillName === skill.skillName,
-                            );
-                            const values = [
-                              ["딜지분", currentSkill?.damageShare ?? 0, targetSkill?.damageShare, "%"],
-                              ["평균 대미지", currentSkill?.averageDamage ?? 0, targetSkill?.averageDamage, ""],
-                              ["분당 사용", currentSkill?.usesPerMinute ?? 0, targetSkill?.usesPerMinute, "회"],
-                            ] as const;
                             return (
                               <div className="comparison-skill-item" key={skill.skillName}>
                                 <strong>{skill.skillName}</strong>
-                                {values.map(([label, current, target, suffix]) => {
-                                  const delta =
-                                    target === undefined
-                                      ? null
-                                      : comparisonDelta(current, target);
-                                  return (
-                                    <div className="comparison-skill-value" key={label}>
-                                      <span>{label}</span>
-                                      <b>
-                                        {label === "평균 대미지"
-                                          ? formatDamageInEok(current)
-                                          : current.toFixed(2)}
-                                        {suffix}
-                                        <small className="comparison-inline-target">
-                                          (B군·{target === undefined
-                                            ? "미사용"
-                                            : `${label === "평균 대미지" ? formatDamageInEok(target) : target.toFixed(2)}${suffix}`})
-                                        </small>
-                                      </b>
-                                      {target !== undefined && label === "분당 사용" ? (
-                                        <em className="difference">
-                                          {comparisonDifference(current, target, "회")}
-                                        </em>
-                                      ) : delta ? (
-                                        <em className={Number(delta) > 0 ? "better" : "lower"}>
-                                          {Number(delta) > 0 ? "▲" : "▼"} {Math.abs(Number(delta)).toFixed(2)}%
-                                        </em>
-                                      ) : null}
-                                    </div>
-                                  );
-                                })}
+                                <div className="comparison-skill-value">
+                                  <span>평균 대미지</span>
+                                  <b>
+                                    {formatDamageInEok(skill.averageDamage)} <small className="comparison-inline-target">(B군·{target ? formatDamageInEok(target.averageDamage) : "미사용"})</small>
+                                  </b>
+                                  {target ? (
+                                    <em className={
+                                      skill.averageDamage === target.averageDamage
+                                        ? "difference"
+                                        : skill.averageDamage > target.averageDamage
+                                          ? "better"
+                                          : "lower"
+                                    }>
+                                      {skill.averageDamage === target.averageDamage
+                                        ? "+0.00%"
+                                        : `${skill.averageDamage > target.averageDamage ? "▲" : "▼"} ${Math.abs(Number(comparisonDelta(skill.averageDamage, target.averageDamage))).toFixed(2)}%`}
+                                    </em>
+                                  ) : null}
+                                </div>
+                                <div className="comparison-skill-value">
+                                  <span>분당 사용</span>
+                                  <b>
+                                    {skill.usesPerMinute.toFixed(2)}회 <small className="comparison-inline-target">(B군·{target ? String(target.usesPerMinute.toFixed(2)) + "회" : "미사용"})</small>
+                                  </b>
+                                  {target ? (
+                                    <em className={
+                                      skill.usesPerMinute === target.usesPerMinute
+                                        ? "difference"
+                                        : skill.usesPerMinute > target.usesPerMinute
+                                          ? "better"
+                                          : "lower"
+                                    }>
+                                      {comparisonDifference(skill.usesPerMinute, target.usesPerMinute, "회")}
+                                    </em>
+                                  ) : null}
+                                </div>
                               </div>
                             );
-                          })()
-                          )) : <small>딜지분 3% 이상인 스킬이 없습니다.</small>;
-                        })()}
+                          })}
                       </div>
                     </div>
                     <div className="comparison-detail-list">
@@ -6147,7 +6460,7 @@ export default function Home() {
                             (B군·{comparisonTargetSummary.attackSpeedPercent.toFixed(2)}%)
                           </small>
                         </b>
-                        <em className={currentComparisonSummary.attackSpeedPercent >= comparisonTargetSummary.attackSpeedPercent ? "better" : "lower"}>
+                        <em className={currentComparisonSummary.attackSpeedPercent === comparisonTargetSummary.attackSpeedPercent ? "difference" : currentComparisonSummary.attackSpeedPercent > comparisonTargetSummary.attackSpeedPercent ? "better" : "lower"}>
                           {comparisonDifference(currentComparisonSummary.attackSpeedPercent, comparisonTargetSummary.attackSpeedPercent, "%")}
                         </em>
                       </div>
@@ -6159,7 +6472,7 @@ export default function Home() {
                             (B군·{comparisonTargetSummary.moveSpeedPercent.toFixed(2)}%)
                           </small>
                         </b>
-                        <em className={currentComparisonSummary.moveSpeedPercent >= comparisonTargetSummary.moveSpeedPercent ? "better" : "lower"}>
+                        <em className={currentComparisonSummary.moveSpeedPercent === comparisonTargetSummary.moveSpeedPercent ? "difference" : currentComparisonSummary.moveSpeedPercent > comparisonTargetSummary.moveSpeedPercent ? "better" : "lower"}>
                           {comparisonDifference(currentComparisonSummary.moveSpeedPercent, comparisonTargetSummary.moveSpeedPercent, "%")}
                         </em>
                       </div>
@@ -6172,7 +6485,7 @@ export default function Home() {
                           </small>
                         </b>
                         {typeof comparisonTargetSummary.averageBackAttackRate === "number" ? (
-                          <em className={currentComparisonSummary.averageBackAttackRate >= comparisonTargetSummary.averageBackAttackRate ? "better" : "lower"}>
+                          <em className={currentComparisonSummary.averageBackAttackRate === comparisonTargetSummary.averageBackAttackRate ? "difference" : currentComparisonSummary.averageBackAttackRate > comparisonTargetSummary.averageBackAttackRate ? "better" : "lower"}>
                             {comparisonDifference(currentComparisonSummary.averageBackAttackRate, comparisonTargetSummary.averageBackAttackRate, "%")}
                           </em>
                         ) : null}
@@ -6186,7 +6499,7 @@ export default function Home() {
                           </small>
                         </b>
                         {typeof comparisonTargetSummary.averageCooldownRate === "number" ? (
-                          <em className={currentComparisonSummary.averageCooldownRate >= comparisonTargetSummary.averageCooldownRate ? "better" : "lower"}>
+                          <em className={currentComparisonSummary.averageCooldownRate === comparisonTargetSummary.averageCooldownRate ? "difference" : currentComparisonSummary.averageCooldownRate > comparisonTargetSummary.averageCooldownRate ? "better" : "lower"}>
                             {comparisonDifference(currentComparisonSummary.averageCooldownRate, comparisonTargetSummary.averageCooldownRate, "%")}
                           </em>
                         ) : null}
@@ -6200,7 +6513,7 @@ export default function Home() {
                           </small>
                         </b>
                         {currentComparisonSummary.braceletEfficiency !== null && comparisonTargetSummary.braceletEfficiency !== null ? (
-                          <em className={currentComparisonSummary.braceletEfficiency >= comparisonTargetSummary.braceletEfficiency ? "better" : "lower"}>
+                          <em className={currentComparisonSummary.braceletEfficiency === comparisonTargetSummary.braceletEfficiency ? "difference" : currentComparisonSummary.braceletEfficiency > comparisonTargetSummary.braceletEfficiency ? "better" : "lower"}>
                             {comparisonDifference(currentComparisonSummary.braceletEfficiency, comparisonTargetSummary.braceletEfficiency, "%")}
                           </em>
                         ) : null}
@@ -6362,7 +6675,10 @@ export default function Home() {
                     : document.body,
                 )
                 : null}
-              <aside className="floating-cycle-ratio-panel">
+              <aside
+                className={`floating-cycle-ratio-panel${cyclePanelLeft === null ? " cycle-panel-inline" : ""}`}
+                style={cyclePanelLeft === null ? undefined : { left: cyclePanelLeft }}
+              >
                 <strong>전투 사이클 스킬</strong>
                 <div className="cycle-ratio-global-options">
                   <label>
@@ -6532,10 +6848,10 @@ export default function Home() {
                         <section className="equipment-section">
                           <div className="equipment-section-heading">
                             <h2>전투 장비</h2>
-                            <GearBulkControl
-                              onChange={updateAllGearEnhancement}
-                            />
                           </div>
+                          <GearBulkControl
+                            onChange={updateAllGearEnhancement}
+                          />
                           <div className="equipment-edit-grid">
                             {gear.map((item) => (
                               <GearEditor
@@ -6592,11 +6908,41 @@ export default function Home() {
                         )
                       }
                     />
+                    <section className="equipment-section avatar-section">
+                      <h2>아바타</h2>
+                      <div className="avatar-select-list">
+                        {avatarSlots.map((slot) => (
+                          <label key={slot}>
+                            <span>{slot}</span>
+                            <select
+                              aria-label={`${slot} 아바타 등급`}
+                              value={avatarGrades[slot] ?? "없음"}
+                              onChange={(event) =>
+                                setAvatarGrades((current) => ({
+                                  ...current,
+                                  [slot]: event.target.value,
+                                }))
+                              }
+                            >
+                              {["없음", "영웅", "전설"].map((grade) => (
+                                <option value={grade} key={grade}>
+                                  {grade}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                        ))}
+                      </div>
+                    </section>
                   </div>
                 ) : null}
-                {tab === "기본 장비" ? (
-                  <div className="ark-board equipment-ark-grid">
-                    <section>
+                {tab === "아크 패시브&사이클" || tab === "기본 장비" ? (
+                  <div
+                    className="ark-board equipment-ark-grid"
+                    ref={arkPassivePanelRef}
+                  >
+                    {tab === "아크 패시브&사이클" ? (
+                      <section>
                       <div className="section-heading">
                         <div>
                           <h2>아크패시브</h2>
@@ -6668,34 +7014,10 @@ export default function Home() {
                           }
                         />
                       </div>
-                      <section className="equipment-section avatar-section">
-                        <h2>아바타</h2>
-                        <div className="avatar-select-list">
-                          {avatarSlots.map((slot) => (
-                            <label key={slot}>
-                              <span>{slot}</span>
-                              <select
-                                aria-label={`${slot} 아바타 등급`}
-                                value={avatarGrades[slot] ?? "없음"}
-                                onChange={(event) =>
-                                  setAvatarGrades((current) => ({
-                                    ...current,
-                                    [slot]: event.target.value,
-                                  }))
-                                }
-                              >
-                                {["없음", "영웅", "전설"].map((grade) => (
-                                  <option value={grade} key={grade}>
-                                    {grade}
-                                  </option>
-                                ))}
-                              </select>
-                            </label>
-                          ))}
-                        </div>
                       </section>
-                    </section>
-                    <section>
+                    ) : null}
+                    {tab === "기본 장비" ? (
+                      <section>
                       <div className="section-heading">
                         <div>
                           <h2>아크그리드</h2>
@@ -6703,7 +7025,10 @@ export default function Home() {
                       </div>
                       {character.arkGrid.cores.length ? (
                         <div className="core-grid">
-                          {character.arkGrid.cores.map((core, index) => {
+                          {arkGridCoreDisplayOrder
+                            .filter((index) => index < character.arkGrid.cores.length)
+                            .map((index) => {
+                            const core = character.arkGrid.cores[index];
                             const normalizedName = core.name
                               .replace(
                                 /^(?:질서|혼돈)의?\s*(?:해|달|별)\s*코어\s*:\s*/,
@@ -6718,12 +7043,31 @@ export default function Home() {
                             ].filter((option) => option !== "없음");
                             return (
                               <article key={core.id}>
-                                <Artwork
-                                  icon={core.icon}
-                                  label={index < 3 ? "秩" : "混"}
-                                  className="ark-grid-core-art"
-                                  dataArkGrade={core.grade ?? ""}
-                                />
+                                <div className="ark-grid-core-art-panel">
+                                  <Artwork
+                                    icon={core.icon}
+                                    label={index < 3 ? "秩" : "混"}
+                                    className="ark-grid-core-art"
+                                    dataArkGrade={core.grade ?? ""}
+                                  />
+                                  <select
+                                    aria-label={`${core.name} 포인트`}
+                                    value={core.point ?? 20}
+                                    onChange={(event) => {
+                                      const point = Number(event.target.value);
+                                      updateCore(index, {
+                                        point,
+                                        level: coreLevel(point),
+                                      });
+                                    }}
+                                  >
+                                    {gridPoints.map((point) => (
+                                      <option value={point} key={point}>
+                                        {point}P
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
                                 <select
                                   value={
                                     options.includes(normalizedName)
@@ -6750,22 +7094,6 @@ export default function Home() {
                                 >
                                   <option value="고대">고대 코어</option>
                                   <option value="유물">유물 코어</option>
-                                </select>
-                                <select
-                                  value={core.point ?? 20}
-                                  onChange={(event) => {
-                                    const point = Number(event.target.value);
-                                    updateCore(index, {
-                                      point,
-                                      level: coreLevel(point),
-                                    });
-                                  }}
-                                >
-                                  {gridPoints.map((point) => (
-                                    <option value={point} key={point}>
-                                      {point}P
-                                    </option>
-                                  ))}
                                 </select>
                                 <b>
                                   Lv.
@@ -6802,10 +7130,12 @@ export default function Home() {
                           )
                         }
                       />
-                    </section>
+                      </section>
+                    ) : null}
                   </div>
                 ) : null}
-                {tab === "스킬 & 전투 사이클" ? (
+                {tab === "아크 패시브&사이클" ? (
+                  <>
                   <div className="skills-cycle">
                     <section className="skill-list-section">
                       <div className="section-heading">
@@ -6873,7 +7203,11 @@ export default function Home() {
                         ))}
                       </div>
                     </section>
-                    <section className="cycle-builder">
+                  </div>
+                    <section
+                      className="cycle-builder cycle-panel"
+                      ref={cycleBuilderPanelRef}
+                    >
                       <div className="section-heading">
                         <div>
                           <h2>전투 사이클 구성 ({cycle.length}개)</h2>
@@ -6882,11 +7216,11 @@ export default function Home() {
                       <div className="cycle-add">
                         <div className="cycle-selection-controls">
                           <select
-                            aria-label="기본 사이클 선택"
+                            aria-label="스킬 프리셋 선택"
                             value={cyclePresetId}
                             onChange={(event) => {
                               manualCycleEditRef.current = true;
-                              const preset = cyclePresets.find(
+                              const preset = availableCyclePresets.find(
                                 (candidate) => candidate.id === event.target.value,
                               );
                               setCyclePresetId(event.target.value);
@@ -6916,6 +7250,10 @@ export default function Home() {
                                   id: crypto.randomUUID(),
                                   useCount: entry.useCount ?? 1,
                                 }));
+                              const missingSkillCount =
+                                preset.entries.filter(
+                                  (entry) => !available.has(entry.skillName),
+                                ).length;
                               const presetBuilderMode =
                                 preset.builderMode ?? cycleBuilderMode;
                               if (presetBuilderMode === "count") {
@@ -6943,15 +7281,52 @@ export default function Home() {
                               if (preset.guidanceSeconds !== undefined) {
                                 setCycleDurationMode("guideline");
                               }
+                              if (preset.manualSeconds !== undefined) {
+                                setCycleDurationMode("manual");
+                                setManualCycleSeconds(preset.manualSeconds);
+                              }
+                              setMessage(
+                                missingSkillCount
+                                  ? `'${preset.label}'을 불러왔지만 현재 캐릭터에 없는 스킬 ${missingSkillCount}개를 제외했습니다.`
+                                  : `'${preset.label}'을 불러왔습니다.`,
+                              );
                             }}
                           >
-                            <option value="">기본 사이클 불러오기</option>
+                            <option value="">프리셋 불러오기</option>
                             {cyclePresets.map((preset) => (
                               <option value={preset.id} key={preset.id}>
                                 {preset.label}
                               </option>
                             ))}
+                            {userCyclePresets.length ? (
+                              <optgroup label="내 스킬 프리셋">
+                                {userCyclePresets.map((preset) => (
+                                  <option value={preset.id} key={preset.id}>
+                                    {preset.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ) : null}
                           </select>
+                          <div className="cycle-preset-actions">
+                            <button
+                              type="button"
+                              onClick={saveCurrentCyclePreset}
+                            >
+                              스킬 프리셋 저장
+                            </button>
+                            <button
+                              type="button"
+                              onClick={deleteSelectedCyclePreset}
+                              disabled={
+                                !userCyclePresets.some(
+                                  (preset) => preset.id === cyclePresetId,
+                                )
+                              }
+                            >
+                              프리셋 삭제
+                            </button>
+                          </div>
                           <select
                             value={cycleSkill}
                             onChange={(event) => {
@@ -6984,19 +7359,41 @@ export default function Home() {
                             ))}
                           </select>
                         </div>
-                        <div className="cycle-action-controls">
-                          <button
-                            type="button"
-                            className="cycle-clear-button"
-                            onClick={() => {
-                              manualCycleEditRef.current = true;
-                              setCyclePresetId("");
-                              setCycle([]);
-                            }}
-                            disabled={cycle.length === 0}
-                          >
-                            전체 스킬 제거
-                          </button>
+                        <div className="cycle-duration-controls">
+                          <label className="cycle-duration-option">
+                            <input
+                              type="checkbox"
+                              checked={cycleDurationMode === "guideline"}
+                              disabled={guidelineCycleSeconds === null}
+                              onChange={() => setCycleDurationMode("guideline")}
+                            />
+                            <span>예상 사이클 시간</span>
+                            <strong>
+                              {guidelineCycleSeconds === null
+                                ? "내부 지침 미등록"
+                                : `${guidelineCycleSeconds.toFixed(2)}초`}
+                            </strong>
+                          </label>
+                          <label className="cycle-duration-option">
+                            <input
+                              type="checkbox"
+                              checked={cycleDurationMode === "manual"}
+                              onChange={() => setCycleDurationMode("manual")}
+                            />
+                            <span>선택 사이클 시간</span>
+                            <input
+                              aria-label="선택 사이클 시간(초)"
+                              type="number"
+                              min="0"
+                              step="0.1"
+                              value={manualCycleSeconds}
+                              disabled={cycleDurationMode !== "manual"}
+                              onChange={(event) =>
+                                setManualCycleSeconds(event.target.value)
+                              }
+                            />
+                            <em>초</em>
+                          </label>
                           <fieldset
                             className="cycle-builder-mode-options"
                             aria-label="사이클 구성 방식"
@@ -7030,43 +7427,18 @@ export default function Home() {
                               <span>횟수 방식</span>
                             </label>
                           </fieldset>
-                        </div>
-                        <div className="cycle-duration-controls">
-                          <label className="cycle-duration-option">
-                            <input
-                              type="checkbox"
-                              checked={cycleDurationMode === "guideline"}
-                              disabled={guidelineCycleSeconds === null}
-                              onChange={() => setCycleDurationMode("guideline")}
-                            />
-                            <span>예상 사이클 시간</span>
-                            <strong>
-                              {guidelineCycleSeconds === null
-                                ? "내부 지침 미등록"
-                                : `${guidelineCycleSeconds.toFixed(2)}초`}
-                            </strong>
-                          </label>
-                          <label className="cycle-duration-option">
-                            <input
-                              type="checkbox"
-                              checked={cycleDurationMode === "manual"}
-                              onChange={() => setCycleDurationMode("manual")}
-                            />
-                            <span>선택 사이클 시간</span>
-                            <input
-                              aria-label="선택 사이클 시간(초)"
-                              type="number"
-                              min="0"
-                              step="0.1"
-                              placeholder="초 입력"
-                              value={manualCycleSeconds}
-                              disabled={cycleDurationMode !== "manual"}
-                              onChange={(event) =>
-                                setManualCycleSeconds(event.target.value)
-                              }
-                            />
-                            <em>초</em>
-                          </label>
+                          <button
+                            type="button"
+                            className="cycle-clear-button"
+                            onClick={() => {
+                              manualCycleEditRef.current = true;
+                              setCyclePresetId("");
+                              setCycle([]);
+                            }}
+                            disabled={cycle.length === 0}
+                          >
+                            전체 스킬 제거
+                          </button>
                         </div>
                       </div>
                       {cycle.length ? (
@@ -7298,7 +7670,13 @@ export default function Home() {
                         </p>
                       )}
                     </section>
-                  </div>
+                  </>
+                ) : null}
+                {tab === "임시" ? (
+                  <section className="empty-tab-panel">
+                    <h2>임시</h2>
+                    <p className="empty-copy">추후 추가될 기능을 준비 중입니다.</p>
+                  </section>
                 ) : null}
               </div>
               <footer className="simulation-debug-footer">

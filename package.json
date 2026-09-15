@@ -1,10 +1,11 @@
 {
   "name": "lostark-dps-simulator",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@11.24.0",
   "scripts": {
+    "check:ui": "node scripts/check-ui-rules.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

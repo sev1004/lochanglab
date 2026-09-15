@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./ui-layout.css";
+import "./skill-cards.css";
 
 export const metadata: Metadata = {
   title: "로아 창술사 DPS 시뮬레이터",

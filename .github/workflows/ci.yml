@@ -29,5 +29,8 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: UI source rules
+        run: pnpm check:ui
+
       - name: Production build
         run: pnpm build
