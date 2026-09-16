@@ -781,6 +781,8 @@ type SavedSettingSnapshot = {
   vulnerableAttribute: boolean;
   criticalRateSynergyEnabled: boolean;
   criticalRateSynergyValue: string;
+  attackMoveSpeedSynergyEnabled: boolean;
+  attackMoveSpeedSynergyValue: string;
   flashOrbEnabled: boolean;
   flashOrbStage: string;
   flashOrbUptime: string;
@@ -1075,6 +1077,8 @@ function buildUnifiedCombatSnapshot(
   criticalRateSynergyEnabled = false,
   criticalRateSynergyValue = "",
   additionalCriticalRate = 0,
+  attackMoveSpeedSynergyEnabled = false,
+  attackMoveSpeedSynergyValue = "",
 ) {
   const classEngraving = glavierClassEngraving(character);
   const attributes = character.initialCombatAttributes
@@ -1091,6 +1095,9 @@ function buildUnifiedCombatSnapshot(
     blessingFood,
     wineFood,
     attributes["신속"].internalTotal,
+    attackMoveSpeedSynergyEnabled && attackMoveSpeedSynergyValue !== ""
+      ? Math.min(30, Math.max(0, Number(attackMoveSpeedSynergyValue)))
+      : 0,
   );
   const combatStats = createCombatStatSnapshot({
     equipment: character.equipment,
@@ -1275,6 +1282,7 @@ function buildSpeedSnapshotValues(
   blessingFood: boolean,
   wineFood: boolean,
   internalSwiftness?: number,
+  attackMoveSpeedSynergy = 0,
 ) {
   const swiftness = internalSwiftness ?? 0;
   const bracelet = character.equipment.find((item) => item.slot === "팔찌");
@@ -1331,6 +1339,7 @@ function buildSpeedSnapshotValues(
     swiftness * 0.01716 +
     (supportRageBuff ? 9 : 0) +
     (banquetBuff ? 5 : 0) +
+    attackMoveSpeedSynergy +
     braceletSpeed +
     engravings +
     stone +
@@ -4147,6 +4156,10 @@ export default function Home() {
     useState(false);
   const [criticalRateSynergyValue, setCriticalRateSynergyValue] =
     useState("");
+  const [attackMoveSpeedSynergyEnabled, setAttackMoveSpeedSynergyEnabled] =
+    useState(false);
+  const [attackMoveSpeedSynergyValue, setAttackMoveSpeedSynergyValue] =
+    useState("");
   const [flashOrbEnabled, setFlashOrbEnabled] = useState(false);
   const [flashOrbStage, setFlashOrbStage] = useState("0");
   const [flashOrbUptime, setFlashOrbUptime] = useState("36.41");
@@ -4236,6 +4249,9 @@ export default function Home() {
             vulnerableAttribute,
             criticalRateSynergyEnabled,
             criticalRateSynergyValue,
+            0,
+            attackMoveSpeedSynergyEnabled,
+            attackMoveSpeedSynergyValue,
           )
         : null,
     [
@@ -4251,6 +4267,8 @@ export default function Home() {
       vulnerableAttribute,
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
+      attackMoveSpeedSynergyEnabled,
+      attackMoveSpeedSynergyValue,
     ],
   );
   const flashOrbCombatSnapshot = useMemo(
@@ -4270,6 +4288,8 @@ export default function Home() {
             criticalRateSynergyEnabled,
             criticalRateSynergyValue,
             flashOrbCriticalRate,
+            attackMoveSpeedSynergyEnabled,
+            attackMoveSpeedSynergyValue,
           )
         : null,
     [
@@ -4286,6 +4306,8 @@ export default function Home() {
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
       flashOrbCriticalRate,
+      attackMoveSpeedSynergyEnabled,
+      attackMoveSpeedSynergyValue,
     ],
   );
   const braceletFreeSnapshot = useMemo(
@@ -4309,6 +4331,9 @@ export default function Home() {
             vulnerableAttribute,
             criticalRateSynergyEnabled,
             criticalRateSynergyValue,
+            0,
+            attackMoveSpeedSynergyEnabled,
+            attackMoveSpeedSynergyValue,
           )
         : null,
     [
@@ -4324,6 +4349,8 @@ export default function Home() {
       vulnerableAttribute,
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
+      attackMoveSpeedSynergyEnabled,
+      attackMoveSpeedSynergyValue,
     ],
   );
   const braceletFreeFlashOrbSnapshot = useMemo(
@@ -4348,6 +4375,8 @@ export default function Home() {
             criticalRateSynergyEnabled,
             criticalRateSynergyValue,
             flashOrbCriticalRate,
+            attackMoveSpeedSynergyEnabled,
+            attackMoveSpeedSynergyValue,
           )
         : null,
     [
@@ -4364,6 +4393,8 @@ export default function Home() {
       criticalRateSynergyEnabled,
       criticalRateSynergyValue,
       flashOrbCriticalRate,
+      attackMoveSpeedSynergyEnabled,
+      attackMoveSpeedSynergyValue,
     ],
   );
   function applyProfile(profile: CharacterProfile) {
@@ -5823,6 +5854,8 @@ export default function Home() {
         vulnerableAttribute,
         criticalRateSynergyEnabled,
         criticalRateSynergyValue,
+        attackMoveSpeedSynergyEnabled,
+        attackMoveSpeedSynergyValue,
         flashOrbEnabled,
         flashOrbStage,
         flashOrbUptime,
@@ -5941,6 +5974,8 @@ export default function Home() {
     setVulnerableAttribute(snapshot.vulnerableAttribute);
     setCriticalRateSynergyEnabled(snapshot.criticalRateSynergyEnabled);
     setCriticalRateSynergyValue(snapshot.criticalRateSynergyValue);
+    setAttackMoveSpeedSynergyEnabled(snapshot.attackMoveSpeedSynergyEnabled ?? false);
+    setAttackMoveSpeedSynergyValue(snapshot.attackMoveSpeedSynergyValue ?? "");
     setFlashOrbEnabled(snapshot.flashOrbEnabled ?? false);
     setFlashOrbStage(snapshot.flashOrbStage ?? "0");
     setFlashOrbUptime(snapshot.flashOrbUptime ?? "36.41");
@@ -6620,6 +6655,42 @@ export default function Home() {
                       const numericValue = Number(nextValue);
                       if (!Number.isFinite(numericValue)) return;
                       setCriticalRateSynergyValue(
+                        String(Math.min(30, Math.max(0, numericValue))),
+                      );
+                    }}
+                  />
+                  <span>%</span>
+                </label>
+                <label className="critical-rate-synergy-control">
+                  <input
+                    type="checkbox"
+                    checked={attackMoveSpeedSynergyEnabled}
+                    onChange={(event) =>
+                      setAttackMoveSpeedSynergyEnabled(event.target.checked)
+                    }
+                  />{" "}
+                  <span
+                    className="doping-buff-label"
+                    title="공격 속도·이동 속도"
+                  >
+                    공이속
+                  </span>
+                  <input
+                    aria-label="공이속 시너지"
+                    type="number"
+                    min="0"
+                    max="30"
+                    step="0.1"
+                    value={attackMoveSpeedSynergyValue}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (nextValue === "") {
+                        setAttackMoveSpeedSynergyValue("");
+                        return;
+                      }
+                      const numericValue = Number(nextValue);
+                      if (!Number.isFinite(numericValue)) return;
+                      setAttackMoveSpeedSynergyValue(
                         String(Math.min(30, Math.max(0, numericValue))),
                       );
                     }}
