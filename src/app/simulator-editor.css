@@ -602,6 +602,7 @@
 .flash-orb-uptime > span:first-child { grid-column:2; grid-row:2; align-self:center; color:#dce7f3; font-size:calc(10 * var(--ui-px)); white-space:nowrap; }
 .flash-orb-rate { display:none; }
 .critical-rate-synergy-control > span:first-of-type { color:#dce7f3; font-size:calc(10 * var(--ui-px)); line-height:1.2; }
+.critical-rate-synergy-control .doping-buff-label { width:auto; white-space:nowrap; }
 .flash-orb-uptime > input[type=number] { grid-column:3; grid-row:2; box-sizing:border-box; width:calc(58 * var(--ui-px)); height:calc(22 * var(--ui-px)); min-width:0; padding:0 calc(2 * var(--ui-px)); border:calc(1 * var(--ui-px)) solid #354b63; border-radius:calc(3 * var(--ui-px)); background:#101c2a; color:#eef5ff; font:calc(9 * var(--ui-px)) "DM Mono",monospace; text-align:center; }
 .flash-orb-uptime > span:last-child { grid-column:4; grid-row:2; align-self:center; position:relative; top:calc(2 * var(--ui-px)); }
 .flash-orb-rate { position:relative; color:#80e7bd; cursor:help; font-size:calc(9 * var(--ui-px)); line-height:1.1; text-align:center; white-space:nowrap; }
