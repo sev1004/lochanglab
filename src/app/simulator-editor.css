@@ -375,7 +375,7 @@
 .skill-core-metrics,.skill-evolution-metrics { display:grid; gap:calc(4 * var(--ui-px)); min-width:0; }
 .skill-metrics span { display:flex; justify-content:space-between; gap:calc(2 * var(--ui-px)); white-space:nowrap; }
 .skill-evolution-metrics { padding-left:calc(6 * var(--ui-px)); border-left:calc(1 * var(--ui-px)) solid #2a3b4f; }
-.skill-metrics b { color:#d7e2ef; font-weight:600; }
+.skill-metrics b { color:#d7e2ef; font-weight:600; min-width:0; flex-shrink:0; }
 .skill-metric-tooltip { position:relative; cursor:help; }
 .skill-metric-tooltip::after { position:absolute; left:0; bottom:calc(100% + calc(5 * var(--ui-px))); z-index:1000; width:max-content; max-width:calc(180 * var(--ui-px)); padding:calc(5 * var(--ui-px)) calc(7 * var(--ui-px)); border:calc(1 * var(--ui-px)) solid #3b6b5a; border-radius:calc(4 * var(--ui-px)); background:#0c1715; color:#d9f6e8; content:attr(data-tooltip); font-size:calc(8 * var(--ui-px)); line-height:1.35; opacity:0; pointer-events:none; transform:translateY(calc(3 * var(--ui-px))); transition:opacity .12s ease,transform .12s ease; visibility:hidden; white-space:nowrap; }
 .skill-metric-tooltip:hover::after,.skill-metric-tooltip:focus-visible::after { opacity:1; transform:translateY(0); visibility:visible; }
@@ -399,6 +399,8 @@
   .skills-cycle .skill-editor .skill-gem-inline > div { grid-template-columns:calc(22 * var(--ui-px)) minmax(0,1fr) calc(18 * var(--ui-px)); column-gap:calc(3 * var(--ui-px)); }
   .skills-cycle .skill-editor .skill-gem-inline .compact-art { width:calc(22 * var(--ui-px)); height:calc(22 * var(--ui-px)); }
   .skills-cycle .skill-editor .skill-gem-inline > div > select:nth-of-type(2) { width:100%; }
+  .skills-cycle .skill-editor .skill-metrics { font-size:10px; }
+  .skills-cycle .skill-editor .skill-metrics span { gap:2px; }
 }
 @media (min-width:701px) and (max-width:1200px) {
   .skills-cycle .skill-editor { grid-template-columns:calc(38 * var(--ui-px)) minmax(0,1fr); }
@@ -421,6 +423,51 @@
   min-width:0;
   width:100%;
   max-width:100%;
+}
+
+.combat-simulation-panel {
+  padding: calc(18 * var(--ui-px));
+  background: var(--surface2);
+  border: calc(1 * var(--ui-px)) solid var(--line);
+  border-radius: calc(8 * var(--ui-px));
+}
+.simulation-panel-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:calc(12 * var(--ui-px)); }
+.simulation-panel-heading h2 { margin:0 0 calc(6 * var(--ui-px)); }
+.simulation-panel-heading p { margin:0; color:var(--muted); }
+.simulation-mode-badge { color:var(--accent); border:1px solid var(--accent); border-radius:999px; padding:calc(4 * var(--ui-px)) calc(8 * var(--ui-px)); white-space:nowrap; }
+.simulation-controls { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)) auto; gap:calc(9 * var(--ui-px)); align-items:end; margin-top:calc(18 * var(--ui-px)); }
+.simulation-controls label { display:grid; gap:calc(5 * var(--ui-px)); color:var(--muted); min-width:0; }
+.simulation-controls input, .simulation-controls select, .simulation-controls button { min-height:33px; box-sizing:border-box; width:100%; }
+.simulation-controls button { align-self:end; white-space:nowrap; }
+.simulation-warning { margin:calc(12 * var(--ui-px)) 0 0; color:#ffb4b4; }
+.simulation-loading { display:grid; gap:calc(7 * var(--ui-px)); margin-top:calc(12 * var(--ui-px)); padding:calc(10 * var(--ui-px)) calc(12 * var(--ui-px)); border:1px solid var(--line); border-radius:calc(5 * var(--ui-px)); color:var(--muted); }
+.simulation-loading-label { color:var(--text); font-weight:600; }
+.simulation-loading-track { height:calc(6 * var(--ui-px)); overflow:hidden; border-radius:999px; background:var(--line); }
+.simulation-loading-track span { display:block; width:35%; height:100%; border-radius:inherit; background:var(--accent); animation:simulation-loading-slide 1.2s ease-in-out infinite; }
+@keyframes simulation-loading-slide { 0% { transform:translateX(-120%); } 50% { transform:translateX(180%); } 100% { transform:translateX(320%); } }
+.simulation-results { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:calc(9 * var(--ui-px)); margin-top:calc(18 * var(--ui-px)); }
+.simulation-results > div { display:grid; gap:calc(4 * var(--ui-px)); padding:calc(12 * var(--ui-px)); border:1px solid var(--line); border-radius:calc(5 * var(--ui-px)); }
+.simulation-results span { color:var(--muted); }
+.simulation-results strong { color:var(--accent); font-size:calc(18 * var(--ui-px)); }
+.simulation-diagnostic-summary { display:flex; flex-wrap:wrap; align-items:center; gap:calc(8 * var(--ui-px)); margin-top:calc(9 * var(--ui-px)); padding:calc(9 * var(--ui-px)) calc(12 * var(--ui-px)); border:1px solid var(--line); border-radius:calc(5 * var(--ui-px)); color:var(--muted); }
+.simulation-diagnostic-summary strong { color:var(--text); }
+.simulation-diagnostic-summary span { white-space:nowrap; }
+.simulation-detail-table-wrap { margin-top:calc(18 * var(--ui-px)); overflow-x:auto; }
+.simulation-detail-table-wrap h3 { margin:0 0 calc(8 * var(--ui-px)); font-size:calc(14 * var(--ui-px)); }
+.simulation-detail-table { width:100%; min-width:760px; border-collapse:collapse; }
+.simulation-detail-table th, .simulation-detail-table td { padding:calc(7 * var(--ui-px)); border-bottom:1px solid var(--line); text-align:right; white-space:nowrap; }
+.simulation-detail-table th:first-child, .simulation-detail-table td:first-child { text-align:left; }
+.simulation-detail-table thead th { color:var(--muted); font-weight:600; }
+.simulation-detail-note { display:block; margin-top:calc(8 * var(--ui-px)); color:var(--muted); }
+@media (max-width:900px) {
+  .simulation-controls { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .simulation-controls button { grid-column:1 / -1; }
+  .simulation-results { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:520px) {
+  .simulation-panel-heading { display:block; }
+  .simulation-mode-badge { display:inline-block; margin-top:calc(9 * var(--ui-px)); }
+  .simulation-controls, .simulation-results { grid-template-columns:1fr; }
 }
 .simulation-workspace .skills-cycle > .skill-list-section,
 .simulation-workspace .skills-cycle > .cycle-builder {

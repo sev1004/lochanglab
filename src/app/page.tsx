@@ -69,6 +69,12 @@ import {
 } from "@/domain/skill/glavier-skill-catalog";
 import { createInternalGearSnapshot } from "@/domain/combat/internal-gear-snapshot";
 import {
+  runCombatSimulations,
+  resolveSimulationInputDelay,
+  SUPPORTED_SIMULATION_SKILLS,
+  type SimulationPlayerLevel,
+} from "@/domain/simulation/combat-simulation";
+import {
   createAdditionalDamageSnapshot,
   createSpecificTypeDamageSnapshot,
   createCardAttributeDamageSnapshot,
@@ -659,33 +665,48 @@ function parseDpsScreenshotSkillRatios(
 }
 
 type MainMenu = "simulation" | "api" | "notice" | "guide" | "bug";
-type SimulationTab = "아크 패시브&사이클" | "기본 장비" | "임시";
+type SimulationTab = "아크 패시브&사이클" | "기본 장비" | "시뮬레이션";
+type CycleSection =
+  | "encounter"
+  | "repeat-flurry"
+  | "repeat-flurry-2"
+  | "repeat-focus";
 type CycleEntry = {
   id: string;
   skillName: string;
   azureDragon: boolean;
   yeongaSimGong: boolean;
   useCount: number;
+  section?: CycleSection;
 };
 type CyclePreset = {
+  version?: 2;
   id: string;
   label: string;
-  entries: readonly (Pick<
+  entries: readonly (Omit<Pick<
     CycleEntry,
-    "skillName" | "azureDragon" | "yeongaSimGong"
-  > & {
+    "id" | "skillName" | "azureDragon" | "yeongaSimGong" | "section"
+  >, "id"> & {
+    id?: string;
+    useCount?: number;
+  })[];
+  calculationEntries?: readonly (Omit<Pick<
+    CycleEntry,
+    "id" | "skillName" | "azureDragon" | "yeongaSimGong" | "section"
+  >, "id"> & {
+    id?: string;
     useCount?: number;
   })[];
   guidanceSeconds?: number;
   manualSeconds?: string;
   builderMode?: CycleBuilderMode;
+  repeatFinisherEnabled?: boolean;
 };
 type UserCyclePreset = CyclePreset & {
   createdAt: string;
 };
 type CycleDurationMode = "guideline" | "manual";
 type CycleBuilderMode = "sequence" | "count";
-
 function groupCycleEntriesByUsage(entries: CycleEntry[]) {
   const skillGroups = new Map<string, Map<string, CycleEntry>>();
   entries.forEach((entry) => {
@@ -728,6 +749,21 @@ function cycleUsageSignature(entries: CycleEntry[]) {
     .join("||");
 }
 
+function normalizeCycleSection(entry: { section?: CycleSection }): CycleSection | undefined {
+  // 구간 정보가 없는 기존 데이터는 원본 순서를 보존한 채
+  // 사용자가 직접 구간을 지정하기 전까지 실행 대상이 아니다.
+  return entry.section;
+}
+
+function isSequenceSkillAllowedInSection(skillName: string, section: CycleSection) {
+  const skill = getGlavierSkill(skillName);
+  if (section === "repeat-flurry" || section === "repeat-flurry-2") {
+    return Boolean(skill?.tags.flurry);
+  }
+  if (section === "repeat-focus") return Boolean(skill?.tags.focus);
+  return true;
+}
+
 type CycleSkillRatioSettings = Record<
   string,
   {
@@ -756,18 +792,23 @@ type SavedSettingComparisonSummary = {
   averageCooldownRate: number;
 };
 type SavedSettingSnapshot = {
+  version?: 2;
   character: CharacterProfile;
   gems: GemProfile[];
   stoneEffects: StoneEffect[];
   avatarGrades: Record<string, string>;
   visibleSkillIds: string[];
   cycle: CycleEntry[];
+  sequenceCycle?: CycleEntry[];
+  countCycle?: CycleEntry[];
   cycleBuilderMode: CycleBuilderMode;
   sequenceCycleBackup?: CycleEntry[] | null;
   countModeBaselineSignature?: string | null;
+  repeatFinisherEnabled?: boolean;
   cyclePresetId: string;
   cycleDurationMode: CycleDurationMode;
   manualCycleSeconds: string;
+  manualCycleCpm?: string;
   cycleSkillRatioSettings: CycleSkillRatioSettings;
   allCycleBackAttack: boolean;
   allCycleCooldown: boolean;
@@ -914,13 +955,24 @@ const bluntJeoljeongFollowupRound = [
   { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
   { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
 ] as const;
-const bluntJeoljeongCycleEntries = [
-  ...bluntJeoljeongFirstRound,
-  ...bluntJeoljeongFollowupRound,
-  ...bluntJeoljeongFollowupRound,
+const bluntJeoljeongFlurryRound = [
   { skillName: "반월섬", azureDragon: false, yeongaSimGong: false },
   { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
   { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+] as const;
+const bluntJeoljeongFocusRound = [
+  { skillName: "적룡포", azureDragon: true, yeongaSimGong: true },
+  { skillName: "유성강천", azureDragon: false, yeongaSimGong: false },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
+const bluntJeoljeongCycleEntries = [
+  ...bluntJeoljeongFirstRound,
+  ...bluntJeoljeongFlurryRound,
+  ...bluntJeoljeongFocusRound,
+  ...bluntJeoljeongFlurryRound,
+  ...bluntJeoljeongFocusRound,
+  ...bluntJeoljeongFlurryRound,
 ] as const;
 const manaJeoljeongFirstRound = bluntJeoljeongFirstRound;
 const manaJeoljeongFollowupRound = [
@@ -932,13 +984,20 @@ const manaJeoljeongFollowupRound = [
   { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
   { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
 ] as const;
+const manaJeoljeongFlurryRound = manaJeoljeongFollowupRound.slice(0, 3);
+const manaJeoljeongFocusRound = [
+  { skillName: "유성강천", azureDragon: true, yeongaSimGong: false },
+  { skillName: "적룡포", azureDragon: false, yeongaSimGong: true },
+  { skillName: "굉열파", azureDragon: false, yeongaSimGong: false },
+  { skillName: "사두룡격", azureDragon: false, yeongaSimGong: false },
+] as const;
 const manaJeoljeongCycleEntries = [
   ...manaJeoljeongFirstRound,
-  ...manaJeoljeongFollowupRound,
-  ...manaJeoljeongFollowupRound,
-  { skillName: "청룡진", azureDragon: false, yeongaSimGong: false },
-  { skillName: "반월섬", azureDragon: true, yeongaSimGong: false },
-  { skillName: "맹룡열파", azureDragon: true, yeongaSimGong: true },
+  ...manaJeoljeongFlurryRound,
+  ...manaJeoljeongFocusRound,
+  ...manaJeoljeongFlurryRound,
+  ...manaJeoljeongFocusRound,
+  ...manaJeoljeongFlurryRound,
 ] as const;
 const jeoljeong222FirstRound = [
   { skillName: "반월섬", azureDragon: false, yeongaSimGong: false },
@@ -976,6 +1035,64 @@ const jeoljeong222CycleEntries = [
   ...jeoljeong222BlueDragonRound,
   ...jeoljeong222RedDragonRound,
 ] as const;
+const jeoljeong222SectionedEntries = [
+  ...jeoljeong222FirstRound.map((entry) => ({ ...entry, section: "encounter" as const })),
+  ...jeoljeong222BlueDragonRound.map((entry) => ({ ...entry, section: "repeat-flurry" as const })),
+  ...jeoljeong222RedDragonRound.map((entry) => ({ ...entry, section: "repeat-flurry-2" as const })),
+] as const;
+
+function createJeoljeong222SectionedEntries(availableSkills: readonly SkillProfile[]) {
+  const levelSeven = new Set(
+    availableSkills
+      .filter((skill) => skill.level >= 7)
+      .map((skill) => skill.name)
+      .filter((name) => ["청룡진", "반월섬", "선풍참혼", "질풍참", "회선창", "청룡출수"].includes(name)),
+  );
+  const partner = ["반월섬", "청룡출수", "회선창"].find((name) => levelSeven.has(name)) ?? "반월섬";
+  const selected = ["청룡진", partner, "선풍참혼", "회선창", "청룡출수", "질풍참"]
+    .filter((name, index, names) => names.indexOf(name) === index)
+    .filter((name) => levelSeven.has(name))
+    .slice(0, 4);
+  const flurryOnePartner = selected.includes(partner) ? partner : "반월섬";
+  const flurryTwo = selected.filter((name) => name !== "청룡진" && name !== flurryOnePartner);
+  const flurryTwoFirst = ["선풍참혼", "회선창", "청룡출수", "질풍참"].find((name) => flurryTwo.includes(name)) ?? "선풍참혼";
+  const flurryTwoSecond = flurryTwo.find((name) => name !== flurryTwoFirst) ?? "질풍참";
+  const card = (skillName: string, azureDragon = false, yeongaSimGong = false) => ({ skillName, azureDragon, yeongaSimGong });
+  return [
+    ...[card("반월섬"), card("청룡진"), card("유성강천", true), card("적룡필살", true, true), card("적룡포", true), card("굉열파"), card("사두룡격")].map((entry) => ({ ...entry, section: "encounter" as const })),
+    ...[card(flurryOnePartner, false, true), card("청룡진")].map((entry) => ({ ...entry, section: "repeat-flurry" as const })),
+    ...[card(flurryTwoFirst, false, true), card(flurryTwoSecond)].map((entry) => ({ ...entry, section: "repeat-flurry-2" as const })),
+    ...[card("유성강천", true), card("적룡포", true, true), card("굉열파"), card("사두룡격")].map((entry) => ({ ...entry, section: "repeat-focus" as const })),
+  ];
+}
+
+function createJeoljeongSections(
+  encounter: readonly Pick<CycleEntry, "skillName" | "azureDragon" | "yeongaSimGong">[],
+  flurry: readonly Pick<CycleEntry, "skillName" | "azureDragon" | "yeongaSimGong">[],
+  focus: readonly Pick<CycleEntry, "skillName" | "azureDragon" | "yeongaSimGong">[],
+) {
+  return [
+    ...encounter.map((entry) => ({ ...entry, section: "encounter" as const })),
+    ...flurry.map((entry) => ({ ...entry, section: "repeat-flurry" as const })),
+    ...focus.map((entry) => ({ ...entry, section: "repeat-focus" as const })),
+  ];
+}
+
+const normalJeoljeongSectionedEntries = createJeoljeongSections(
+  normalJeoljeongFirstRound.slice(0, 6),
+  [normalJeoljeongFirstRound[0], normalJeoljeongFirstRound[2], normalJeoljeongFirstRound[1]],
+  normalJeoljeongFirstRound.slice(3, 4).concat(normalJeoljeongFirstRound.slice(5)),
+);
+const bluntJeoljeongSectionedEntries = createJeoljeongSections(
+  bluntJeoljeongFirstRound,
+  bluntJeoljeongFlurryRound,
+  bluntJeoljeongFocusRound,
+);
+const manaJeoljeongSectionedEntries = createJeoljeongSections(
+  manaJeoljeongFirstRound,
+  manaJeoljeongFlurryRound,
+  manaJeoljeongFocusRound,
+);
 
 const jeolje222CountCycleEntries = [
   {
@@ -1033,6 +1150,7 @@ function createCyclePresets(
   shorthand: string | null,
   hasBluntEdge: boolean,
   hasManaFurnace: boolean,
+  availableSkills: readonly SkillProfile[] = [],
 ): CyclePreset[] {
   if (classEngraving === "절제") {
     return ["222", "232"].map((presetShorthand) => ({
@@ -1048,17 +1166,22 @@ function createCyclePresets(
     {
       id: "jeoljeong-222",
       label: "특치연격 사이클",
-      entries: jeoljeong222CycleEntries,
+      entries: availableSkills.length
+        ? createJeoljeong222SectionedEntries(availableSkills)
+        : jeoljeong222SectionedEntries,
+      calculationEntries: jeoljeong222CycleEntries,
     },
     {
       id: "jeoljeong-mana",
       label: "청맹반 사이클(마용)",
-      entries: manaJeoljeongCycleEntries,
+      entries: manaJeoljeongSectionedEntries,
+      calculationEntries: manaJeoljeongCycleEntries,
     },
     {
       id: "jeoljeong-blunt",
       label: "청맹적 사이클 (뭉가)",
-      entries: bluntJeoljeongCycleEntries,
+      entries: bluntJeoljeongSectionedEntries,
+      calculationEntries: bluntJeoljeongCycleEntries,
     },
   ];
 }
@@ -1367,9 +1490,34 @@ const errors: Record<number, string> = {
 const simTabs: SimulationTab[] = [
   "아크 패시브&사이클",
   "기본 장비",
-  "임시",
+  "시뮬레이션",
 ];
 const siteNotices = [
+  {
+    version: "v1.2",
+    date: "2026.09.29",
+    title: "전투 시뮬레이션 추가 및 사이클 구성 개편",
+    sections: [
+      {
+        title: "전투 시뮬레이션 기능 추가",
+        items: [
+          "전투 시간, 반복 횟수, 플레이 수준과 적룡필살 예약 시간을 설정해 전투 시뮬레이션을 실행할 수 있습니다.",
+          "구성한 사이클과 보스 패턴을 반영한 평균 DPS, 스킬별 사용 횟수·치명타율·백어택률·청룡진 적용률·쿨비를 확인할 수 있습니다.",
+          "현재 전투 시뮬레이션은 절정 333 연가 창식 세팅을 지원합니다.",
+        ],
+      },
+      {
+        title: "사이클 구성 기능 개편",
+        items: [
+          "사이클 방식에서 조우·난무·집중 구간별로 스킬을 추가하고 순서와 버프 조건을 편집할 수 있습니다. 조우 사이클은 선택 사항입니다.",
+          "사이클 방식과 횟수 방식의 구성을 각각 유지하며, 일반 예상 DPS를 계산할 수 있습니다.",
+          "전투 사이클 스킬 패널의 기본값을 백어택 전체 100%, 쿨비 전체 95%로 설정했습니다.",
+          "절정 222 연격은 난무 사이클 1·2를 구성하고 예상 CPM 8.50 또는 선택 CPM으로 일반 예상 DPS를 계산할 수 있습니다.",
+          "절제는 횟수 방식으로 사이클을 구성합니다.",
+        ],
+      },
+    ],
+  },
   {
     version: "v1.1",
     date: "2026.09.16",
@@ -1424,7 +1572,7 @@ const siteNotices = [
         title: "전투 사이클 구성 방식 추가",
         description: "전투 사이클을 두 가지 방식으로 구성할 수 있습니다.",
         items: [
-          "순서 방식: 스킬을 실제 사용 순서대로 하나씩 배치하며, 스킬의 순서를 직접 변경할 수 있습니다.",
+          "사이클 방식: 스킬을 실제 사용 순서대로 하나씩 배치하며, 스킬의 순서를 직접 변경할 수 있습니다.",
           "횟수 방식: 동일한 스킬과 버프 조합을 하나로 묶어 사용 횟수로 계산하며, 스킬 순서와 관계없이 일정 시간 동안 사용한 횟수를 기준으로 DPS를 계산합니다.",
         ],
       },
@@ -1779,6 +1927,101 @@ function Artwork({
     >
       {icon ? <img src={icon} alt="" /> : <span>{label}</span>}
     </span>
+  );
+}
+
+function SequenceCycleCard({
+  entry,
+  order,
+  sectionLength,
+  classEngraving,
+  skill,
+  azureDragonCycleIcon,
+  yeongaSimGongCycleIcon,
+  onUpdate,
+  onMove,
+  onRemove,
+  onSectionChange,
+  allowSectionChange = true,
+  onDragStart,
+  onDrop,
+  onDragEnd,
+}: {
+  entry: CycleEntry;
+  order: number;
+  sectionLength: number;
+  classEngraving: string | null;
+  skill: SkillProfile | undefined;
+  azureDragonCycleIcon: string | null;
+  yeongaSimGongCycleIcon: string | null;
+  onUpdate: (id: string, update: Partial<CycleEntry>) => void;
+  onMove: (id: string, direction: -1 | 1) => void;
+  onRemove: (id: string) => void;
+  onSectionChange: (id: string, section: CycleSection) => void;
+  allowSectionChange?: boolean;
+  onDragStart: (id: string) => void;
+  onDrop: (id: string) => void;
+  onDragEnd: () => void;
+}) {
+  const skillName = entry.skillName;
+  return (
+    <div
+      className="cycle-skill-tile"
+      data-cycle-card-id={entry.id}
+      draggable
+      onDragStart={() => onDragStart(entry.id)}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => { event.preventDefault(); onDrop(entry.id); }}
+      onDragEnd={onDragEnd}
+    >
+      {!entry.section && allowSectionChange ? (
+        <select
+          className="cycle-section-select"
+          aria-label={`${skillName} 사이클 구간 지정`}
+          value=""
+          onChange={(event) => onSectionChange(entry.id, event.target.value as CycleSection)}
+        >
+          <option value="" disabled>구간 지정</option>
+          <option value="encounter">조우</option>
+          {getGlavierSkill(skillName)?.tags.flurry ? <option value="repeat-flurry">난무 사이클</option> : null}
+          {getGlavierSkill(skillName)?.tags.focus ? <option value="repeat-focus">집중 사이클</option> : null}
+        </select>
+      ) : null}
+      <b className="cycle-skill-order">{order + 1}</b>
+      <Artwork icon={skill?.icon ?? null} label={skillName.slice(0, 1)} title={skillName} />
+      <span className="cycle-skill-name">{skillName}</span>
+      {classEngraving !== "절제" ? (
+        <div className="cycle-skill-buffs">
+          <button
+            className={entry.azureDragon ? "active" : ""}
+            type="button"
+            title="청룡진 적용"
+            aria-label={`${skillName} 청룡진 적용`}
+            aria-pressed={entry.azureDragon}
+            onClick={() => onUpdate(entry.id, { azureDragon: !entry.azureDragon })}
+          >
+            {azureDragonCycleIcon ? <img src={azureDragonCycleIcon} alt="" /> : <span>청</span>}
+          </button>
+          <button
+            className={entry.yeongaSimGong ? "active" : ""}
+            type="button"
+            title="연가심공 적용"
+            aria-label={`${skillName} 연가심공 적용`}
+            aria-pressed={entry.yeongaSimGong}
+            onClick={() => onUpdate(entry.id, { yeongaSimGong: !entry.yeongaSimGong })}
+          >
+            {yeongaSimGongCycleIcon ? <img src={yeongaSimGongCycleIcon} alt="" /> : <span>연</span>}
+          </button>
+        </div>
+      ) : null}
+      {classEngraving !== "절제" ? (
+        <div className="cycle-skill-actions">
+          <button type="button" aria-label={`${skillName} 한 칸 왼쪽 이동`} disabled={order === 0} onClick={() => onMove(entry.id, -1)}>←</button>
+          <button type="button" aria-label={`${skillName} 한 칸 오른쪽 이동`} disabled={order === sectionLength - 1} onClick={() => onMove(entry.id, 1)}>→</button>
+        </div>
+      ) : null}
+      <button className="cycle-skill-remove" type="button" aria-label={`${skillName} 삭제`} onClick={() => onRemove(entry.id)}>×</button>
+    </div>
   );
 }
 function qualityTone(quality: number | null) {
@@ -4063,9 +4306,9 @@ function UsagePage() {
       number: "06",
       title: "스킬 & 전투 사이클 탭",
       description:
-        "스킬 & 전투 사이클 탭에서는 순서 방식과 횟수 방식 중 하나를 선택할 수 있습니다. 순서 방식은 스킬을 실제 사용 순서대로 하나씩 배치하고 이동하는 방식입니다. 횟수 방식은 동일한 스킬과 버프 조합을 하나로 묶어 횟수만 입력하는 방식이며, 스킬 순서는 계산에 사용하지 않습니다. 방식을 전환해도 기존 구성은 가능한 범위에서 유지되며, 스킬 카드에서는 청룡진·연가심공 적용 여부를 각각 설정할 수 있습니다.",
+        "스킬 & 전투 사이클 탭에서는 사이클 방식과 횟수 방식 중 하나를 선택할 수 있습니다. 사이클 방식은 스킬을 실제 사용 순서대로 하나씩 배치하고 이동하는 방식입니다. 횟수 방식은 동일한 스킬과 버프 조합을 하나로 묶어 횟수만 입력하는 방식이며, 스킬 순서는 계산에 사용하지 않습니다. 방식을 전환해도 기존 구성은 가능한 범위에서 유지되며, 스킬 카드에서는 청룡진·연가심공 적용 여부를 각각 설정할 수 있습니다.",
       image: usageSkillCycleImage,
-      alt: "순서 방식과 횟수 방식을 선택할 수 있는 스킬 및 전투 사이클 탭 화면",
+      alt: "사이클 방식과 횟수 방식을 선택할 수 있는 스킬 및 전투 사이클 탭 화면",
     },
     {
       number: "07",
@@ -4175,7 +4418,8 @@ export default function Home() {
     "API 설정에서 API 키를 입력한 뒤 캐릭터를 조회하세요.",
   );
   const [searching, setSearching] = useState(false);
-  const [cycle, setCycle] = useState<CycleEntry[]>([]);
+  const [sequenceCycle, setSequenceCycle] = useState<CycleEntry[]>([]);
+  const [countCycle, setCountCycle] = useState<CycleEntry[]>([]);
   const [cycleBuilderMode, setCycleBuilderMode] =
     useState<CycleBuilderMode>("sequence");
   const [sequenceCycleBackup, setSequenceCycleBackup] = useState<
@@ -4185,7 +4429,16 @@ export default function Home() {
     string | null
   >(null);
   const [cycleSkill, setCycleSkill] = useState("");
+  const [cycleSection, setCycleSection] = useState<CycleSection>("repeat-flurry");
   const [cyclePresetId, setCyclePresetId] = useState("");
+  const [simulationDuration, setSimulationDuration] = useState("700");
+  const [simulationPlayerLevel, setSimulationPlayerLevel] =
+    useState<SimulationPlayerLevel>(85);
+  const [simulationFinisherThreshold, setSimulationFinisherThreshold] =
+    useState("8");
+  const [simulationRuns, setSimulationRuns] = useState("50");
+  const [simulationRunning, setSimulationRunning] = useState(false);
+  const [simulationResult, setSimulationResult] = useState<ReturnType<typeof runCombatSimulations> | null>(null);
   const [userCyclePresets, setUserCyclePresets] = useState<UserCyclePreset[]>(
     [],
   );
@@ -4208,11 +4461,12 @@ export default function Home() {
     useState<CycleSkillRatioSettings>({});
   const [allCycleBackAttack, setAllCycleBackAttack] = useState(true);
   const [allCycleCooldown, setAllCycleCooldown] = useState(true);
-  const [allCycleBackAttackRate, setAllCycleBackAttackRate] = useState("90");
-  const [allCycleCooldownRate, setAllCycleCooldownRate] = useState("80");
+  const [allCycleBackAttackRate, setAllCycleBackAttackRate] = useState("100");
+  const [allCycleCooldownRate, setAllCycleCooldownRate] = useState("95");
   const [cycleDurationMode, setCycleDurationMode] =
     useState<CycleDurationMode>("guideline");
   const [manualCycleSeconds, setManualCycleSeconds] = useState("");
+  const [manualCycleCpm, setManualCycleCpm] = useState("8.50");
   const [draggedCycleIndex, setDraggedCycleIndex] = useState<number | null>(
     null,
   );
@@ -4271,6 +4525,15 @@ export default function Home() {
       attackMoveSpeedSynergyValue,
     ],
   );
+
+  const cycle = cycleBuilderMode === "sequence" ? sequenceCycle : countCycle;
+  const setActiveCycle = (update: CycleEntry[] | ((current: CycleEntry[]) => CycleEntry[])) => {
+    if (cycleBuilderMode === "sequence") {
+      setSequenceCycle(update);
+    } else {
+      setCountCycle(update);
+    }
+  };
   const flashOrbCombatSnapshot = useMemo(
     () =>
       character && flashOrbCriticalRate > 0
@@ -4491,6 +4754,9 @@ export default function Home() {
   const arkGridShorthand = character
     ? deriveGridShorthand(character.arkGrid.cores, classEngraving)
     : null;
+  const hasYeongaChangshikCore = Boolean(
+    character?.arkGrid.cores.some((core) => core.name === "연가 창식"),
+  );
   const excludesScreenshotCooldownRatio =
     classEngraving === "절정" && arkGridShorthand === "222";
   const isClassSkillVisible = (skill: SkillProfile) =>
@@ -4517,7 +4783,7 @@ export default function Home() {
       if (!saved) return;
       const parsed: unknown = JSON.parse(saved);
       if (!Array.isArray(parsed)) return;
-      const valid = parsed.filter(
+    const valid = parsed.filter(
         (preset: unknown): preset is UserCyclePreset => {
           if (typeof preset !== "object" || preset === null) return false;
           const candidate = preset as {
@@ -4541,7 +4807,15 @@ export default function Home() {
           );
         },
       );
-      setUserCyclePresets(valid);
+      const migrated = valid.map((preset) => ({
+        ...preset,
+        version: 2 as const,
+        calculationEntries:
+          preset.calculationEntries ??
+          preset.entries.map((entry) => ({ ...entry, section: undefined })),
+      }));
+      setUserCyclePresets(migrated);
+      localStorage.setItem(USER_CYCLE_PRESETS_KEY, JSON.stringify(migrated));
     } catch {
       /* 사용자 프리셋 복원 실패는 무시한다. */
     }
@@ -4614,7 +4888,7 @@ export default function Home() {
     >,
   ) {
     manualCycleEditRef.current = true;
-    setCycle((current) => {
+    setActiveCycle((current) => {
       const next = current.map((entry) =>
         entry.id === entryId ? { ...entry, ...patch } : entry,
       );
@@ -4627,40 +4901,11 @@ export default function Home() {
   }
 
   function switchCycleBuilderMode(nextMode: CycleBuilderMode) {
+    if (nextMode === "sequence" && classEngraving === "절제") return;
     if (nextMode === cycleBuilderMode) return;
     manualCycleEditRef.current = true;
     setDraggedCycleIndex(null);
-    if (nextMode === "count") {
-      const originalSequence = cycle.map((entry) => ({ ...entry }));
-      const groupedCycle = groupCycleEntriesByUsage(originalSequence);
-      setSequenceCycleBackup(originalSequence);
-      setCountModeBaselineSignature(cycleUsageSignature(groupedCycle));
-      setCycle(groupedCycle);
-      setCycleBuilderMode("count");
-      return;
-    }
-
-    const canRestoreOriginalSequence =
-      sequenceCycleBackup !== null &&
-      countModeBaselineSignature === cycleUsageSignature(cycle);
-    setCycle(
-      canRestoreOriginalSequence
-        ? sequenceCycleBackup.map((entry) => ({ ...entry }))
-        : cycle.flatMap((entry) => {
-            const useCount = Math.max(
-              0,
-              Math.floor(Number(entry.useCount) || 0),
-            );
-            return Array.from({ length: useCount }, (_, index) => ({
-              ...entry,
-              id: index === 0 ? entry.id : crypto.randomUUID(),
-              useCount: 1,
-            }));
-          }),
-    );
-    setSequenceCycleBackup(null);
-    setCountModeBaselineSignature(null);
-    setCycleBuilderMode("sequence");
+    setCycleBuilderMode(nextMode);
   }
   const commonCooldownReductionPercent =
     character && sharedCombatSnapshot
@@ -4682,6 +4927,7 @@ export default function Home() {
     arkGridShorthand,
     hasBluntEdge,
     hasManaFurnace,
+    visibleSkills,
   );
   const automaticCyclePreset =
     classEngraving === "절제"
@@ -5014,7 +5260,8 @@ export default function Home() {
     automaticCycleKeyRef.current = automaticCycleKey;
     if (!preset) {
       setCyclePresetId("");
-      setCycle([]);
+      setSequenceCycle([]);
+      setCountCycle([]);
       setSequenceCycleBackup(null);
       setCountModeBaselineSignature(null);
       return;
@@ -5034,42 +5281,137 @@ export default function Home() {
     setCyclePresetId(preset.id);
     const presetCycle = preset.entries
       .filter((entry) => available.has(entry.skillName))
-      .map((entry) => ({
+      .map((entry, index) => ({
         ...entry,
-        id: crypto.randomUUID(),
+        section: normalizeCycleSection(entry),
+        id: entry.id ?? crypto.randomUUID(),
         useCount: entry.useCount ?? 1,
       }));
-    const presetBuilderMode = preset.builderMode ?? cycleBuilderMode;
-    if (presetBuilderMode === "count") {
-      const groupedCycle = groupCycleEntriesByUsage(presetCycle);
-      setCycleBuilderMode("count");
-      if (preset.builderMode === "count") {
-        setSequenceCycleBackup(null);
-        setCountModeBaselineSignature(null);
-      } else {
-        setSequenceCycleBackup(presetCycle.map((entry) => ({ ...entry })));
-        setCountModeBaselineSignature(cycleUsageSignature(groupedCycle));
-      }
-      setCycle(groupedCycle);
-    } else {
-      setCycleBuilderMode("sequence");
-      setSequenceCycleBackup(null);
-      setCountModeBaselineSignature(null);
-      setCycle(presetCycle);
-    }
+    const sequenceEntries = preset.entries
+      .filter((entry) => available.has(entry.skillName))
+      .map((entry) => ({
+        ...entry,
+        section: normalizeCycleSection(entry),
+        id: entry.id ?? crypto.randomUUID(),
+        useCount: 1,
+      }));
+    const countEntries = (preset.calculationEntries ?? preset.entries)
+      .filter((entry) => available.has(entry.skillName))
+      .map((entry) => ({
+        ...entry,
+        section: undefined,
+        id: entry.id ?? crypto.randomUUID(),
+        useCount: entry.useCount ?? 1,
+      }));
+    setSequenceCycle(sequenceEntries);
+    setCountCycle(groupCycleEntriesByUsage(countEntries));
+    setCycleBuilderMode(preset.builderMode === "count" ? "count" : "sequence");
+    setSequenceCycleBackup(null);
+    setCountModeBaselineSignature(null);
     if (preset.guidanceSeconds !== undefined) {
       setCycleDurationMode("guideline");
     }
   }, [
     automaticCycleKey,
     character,
-    cycleBuilderMode,
   ]);
+  // 일반 DPS 계산은 시뮬레이션용 조우·반복 카드와 분리된 계산용 목록을 사용한다.
+  // 사용자 프리셋은 별도 계산 목록이 없으므로 현재 편집 목록을 그대로 사용한다.
+  // 일반 DPS 계산은 시뮬레이션 실행용 구간 편집 상태와 분리한다.
+  // 시스템 프리셋은 명시된 legacy 계산 목록을 계속 사용해야 하며,
+  // 시뮬레이션 구간을 수정했다고 계산 목록까지 교체하면 안 된다.
+  const calculationCycleEntries = cycleBuilderMode === "count" ? countCycle : cycle;
+  const sequenceDpsCycle = (() => {
+    if (cycleBuilderMode !== "sequence" || classEngraving !== "절정" || !unifiedSimulation) return null;
+    const encounter = cycle.filter((entry) => entry.section === "encounter");
+    if (arkGridShorthand === "222") {
+      const flurryOne = cycle.filter((entry) => entry.section === "repeat-flurry");
+      const flurryTwo = cycle.filter((entry) => entry.section === "repeat-flurry-2");
+      const focus = cycle.filter((entry) => entry.section === "repeat-focus");
+      const cooldownOf = (skillName: string) => Object.values(unifiedSimulation.skills).find((entry) => entry.calculation.skill.name === skillName)?.cooldown?.cooldownSeconds ?? 0;
+      const finisherCooldown = cooldownOf("적룡필살");
+      const targetCpm = cycleDurationMode === "manual"
+        ? Number(manualCycleCpm)
+        : 8.5;
+      const cycleCount = finisherCooldown > 0
+        ? targetCpm > 0
+          ? (targetCpm * finisherCooldown) / 60
+          : null
+        : null;
+      if (!cycleCount || encounter.length === 0 || flurryOne.length === 0 || flurryTwo.length === 0 || focus.length === 0) return null;
+      const repeatCount = Math.max(0, cycleCount - 1);
+      const flurryTwoCount = Math.ceil(repeatCount / 2);
+      const flurryOneCount = Math.max(0, repeatCount - flurryTwoCount);
+      const repeatEntries = [
+        ...flurryTwo.map((entry) => ({ ...entry, id: `${entry.id}-repeat-flurry-2`, useCount: flurryTwoCount })),
+        ...flurryOne.map((entry) => ({ ...entry, id: `${entry.id}-repeat-flurry-1`, useCount: flurryOneCount })),
+        ...focus.map((entry) => ({
+          ...entry,
+          id: `${entry.id}-repeat-focus-even`,
+          useCount: flurryTwoCount,
+          azureDragon: false,
+        })),
+        ...focus.map((entry) => ({
+          ...entry,
+          id: `${entry.id}-repeat-focus-odd`,
+          useCount: flurryOneCount,
+        })),
+      ];
+      return {
+        entries: [...encounter, ...repeatEntries],
+        seconds: finisherCooldown,
+        cpm: targetCpm,
+        cycleCount,
+      };
+    }
+    const repeat = cycle.filter((entry) => entry.section === "repeat-flurry" || entry.section === "repeat-focus");
+    const repeatFlurry = cycle.filter((entry) => entry.section === "repeat-flurry");
+    const regularRepeat = repeat.filter((entry) => entry.skillName !== "적룡필살");
+    const cooldownOf = (skillName: string) => Object.values(unifiedSimulation.skills).find((entry) => entry.calculation.skill.name === skillName)?.cooldown?.cooldownSeconds ?? 0;
+    const longest = regularRepeat.reduce((best, entry) => Math.max(best, cooldownOf(entry.skillName)), 0);
+    const redDragonCooldown = cooldownOf("적룡포");
+    const baseSeconds = longest > 0 ? longest : redDragonCooldown;
+    if (!baseSeconds) return null;
+    const finisherCooldown = cooldownOf("적룡필살");
+    const cycleCount = Math.max(1, Math.ceil(finisherCooldown / baseSeconds));
+    const repeatCount = encounter.length > 0 ? Math.max(0, cycleCount - 1) : cycleCount;
+    const encounterFlurryCount = encounter.filter((entry) =>
+      repeatFlurry.some((flurryEntry) => flurryEntry.skillName === entry.skillName),
+    ).length;
+    const needsTrailingFlurry =
+      encounter.length > 0 && encounterFlurryCount < repeatFlurry.length;
+    const trailingFlurry = needsTrailingFlurry
+      ? repeatFlurry.map((entry, index) => ({
+          ...entry,
+          id: `${entry.id}-trailing-flurry-${index}`,
+        }))
+      : [];
+    return {
+      entries: [
+        ...encounter,
+        ...repeat.flatMap((entry) =>
+          Array.from({ length: repeatCount }, (_, index) => ({
+            ...entry,
+            id: `${entry.id}-repeat-${index}`,
+          })),
+        ),
+        ...trailingFlurry,
+      ],
+      seconds: baseSeconds * cycleCount,
+      cpm: (60 * cycleCount) / (baseSeconds * cycleCount),
+      cycleCount,
+    };
+  })();
+  const dpsCycleEntries = cycleBuilderMode === "count" ? countCycle : sequenceDpsCycle?.entries ?? [];
   const calculateGuidelineCycleSeconds = (
     simulation: typeof unifiedSimulation,
   ) => {
+    if (cycleBuilderMode === "sequence") return sequenceDpsCycle?.seconds ?? null;
     if (!selectedCyclePreset || !simulation) return null;
-    if (selectedCyclePreset.guidanceSeconds !== undefined) {
+    if (
+      selectedCyclePreset.guidanceSeconds !== undefined &&
+      !selectedCyclePreset.id.startsWith("user-cycle-")
+    ) {
       return selectedCyclePreset.guidanceSeconds;
     }
     const targetSkillName =
@@ -5092,17 +5434,41 @@ export default function Home() {
       ? targetCooldown
       : targetCooldown * 3;
   };
-  const guidelineCycleSeconds = calculateGuidelineCycleSeconds(unifiedSimulation);
-  const braceletFreeCycleSeconds =
-    classEngraving === "절정" && cycleDurationMode === "guideline"
-      ? calculateGuidelineCycleSeconds(braceletFreeSimulation)
-      : cycleDurationMode === "guideline"
-        ? guidelineCycleSeconds
-        : Number(manualCycleSeconds);
-  const selectedCycleSeconds =
-    cycleDurationMode === "guideline"
-      ? guidelineCycleSeconds
+  const isJeoljeong222 = classEngraving === "절정" && arkGridShorthand === "222";
+  const guidelineCycleCpm = isJeoljeong222 ? 8.5 : null;
+  const calculatedGuidelineCycleSeconds = calculateGuidelineCycleSeconds(unifiedSimulation);
+  const guidelineCycleSeconds = isJeoljeong222
+    ? sequenceDpsCycle?.seconds ?? null
+    : calculatedGuidelineCycleSeconds;
+  const selectedCycleCpm = isJeoljeong222
+    ? cycleDurationMode === "manual"
+      ? Number(manualCycleCpm)
+      : guidelineCycleCpm
+    : null;
+  const cycleSecondsForSimulation = (
+    simulation: typeof unifiedSimulation,
+  ) => {
+    if (!simulation) return null;
+    if (isJeoljeong222) {
+      return Object.values(simulation.skills).find(
+        (entry) => entry.calculation.skill.name === "적룡필살",
+      )?.cooldown?.cooldownSeconds ?? null;
+    }
+    return cycleDurationMode === "guideline"
+      ? calculateGuidelineCycleSeconds(simulation)
       : Number(manualCycleSeconds);
+  };
+  const braceletFreeCycleSeconds = cycleSecondsForSimulation(
+    braceletFreeSimulation,
+  );
+  const selectedCycleSeconds =
+    isJeoljeong222
+      ? sequenceDpsCycle?.seconds ?? 0
+      : cycleDurationMode === "manual"
+      ? Number(manualCycleSeconds)
+      : cycleBuilderMode === "sequence"
+        ? sequenceDpsCycle?.seconds ?? 0
+        : guidelineCycleSeconds;
   const cycleSeconds =
     typeof selectedCycleSeconds === "number" &&
     Number.isFinite(selectedCycleSeconds)
@@ -5111,12 +5477,12 @@ export default function Home() {
   const calculateCycleDamageRows = (
     simulation: typeof unifiedSimulation,
   ) => {
-    if (!simulation || cycle.length === 0) return [];
+    if (!simulation || dpsCycleEntries.length === 0) return [];
     const rows = new Map<
       string,
       { skillName: string; count: number; totalDamage: number }
     >();
-    cycle.forEach((entry) => {
+    dpsCycleEntries.forEach((entry) => {
       const skill = visibleSkills.find(
         (candidate) => candidate.name === entry.skillName,
       );
@@ -5130,9 +5496,11 @@ export default function Home() {
       const backAttackRate = allCycleBackAttack
         ? Math.min(100, Math.max(0, Number(allCycleBackAttackRate) || 0))
         : Math.min(100, Math.max(0, Number(ratios.backAttackRate) || 0));
-      const cooldownRate = allCycleCooldown
-        ? Math.min(100, Math.max(0, Number(allCycleCooldownRate) || 0))
-        : Math.min(100, Math.max(0, Number(ratios.cooldownRate) || 0));
+      const cooldownRate = isJeoljeong222
+        ? 100
+        : allCycleCooldown
+          ? Math.min(100, Math.max(0, Number(allCycleCooldownRate) || 0))
+          : Math.min(100, Math.max(0, Number(ratios.cooldownRate) || 0));
       const scenarioFor = (backAttack: boolean) =>
         simulationSkill.calculation.scenarios.find(
           (scenario) =>
@@ -5155,6 +5523,8 @@ export default function Home() {
       const useCount =
         cycleBuilderMode === "count"
           ? Math.max(0, Math.floor(Number(entry.useCount) || 0))
+          : isJeoljeong222
+            ? Math.max(0, Number(entry.useCount) || 0)
           : 1;
       current.count += useCount;
       current.totalDamage +=
@@ -5169,6 +5539,160 @@ export default function Home() {
   const cycleDamageRows = calculateCycleDamageRows(unifiedSimulation);
   const braceletFreeCycleDamageRows =
     calculateCycleDamageRows(braceletFreeSimulation);
+  const unsupportedSimulationSkills = cycle
+    .map((entry) => entry.skillName)
+    .filter((skillName) => !SUPPORTED_SIMULATION_SKILLS.includes(skillName as typeof SUPPORTED_SIMULATION_SKILLS[number]));
+  const missingRequiredSimulationSkill = !cycle.some((entry) => entry.skillName === "맹룡열파");
+  const repeatFinisherDataMissing =
+    classEngraving === "절정" &&
+    arkGridShorthand !== "222" &&
+    !cycle.some((entry) => entry.skillName === "적룡필살") &&
+    !visibleSkills.some(
+      (skill) => skill.name === "적룡필살" && Boolean(unifiedSimulation?.skills[skill.id]),
+    );
+  const simulationSkillDataMissing = cycle.some((entry) => {
+    const skill = visibleSkills.find((candidate) => candidate.name === entry.skillName);
+    const calculated = skill ? unifiedSimulation?.skills[skill.id] : undefined;
+    return !calculated?.cooldown?.cooldownSeconds || !calculated.calculation.scenarios.length;
+  });
+  const unsupportedSimulationBuild =
+    classEngraving !== "절정" ||
+    arkGridShorthand === "222" ||
+    !hasYeongaChangshikCore;
+  const missingCycleSections = classEngraving === "절정" && arkGridShorthand !== "222" && (
+    cycle.some((entry) => !entry.section) ||
+    !cycle.some((entry) => entry.section === "repeat-flurry") ||
+    !cycle.some((entry) => entry.section === "repeat-focus")
+  );
+  const invalidCycleSections = cycle.some((entry) =>
+    entry.section === "repeat-flurry"
+      ? !isSequenceSkillAllowedInSection(entry.skillName, "repeat-flurry")
+      : entry.section === "repeat-focus"
+        ? !isSequenceSkillAllowedInSection(entry.skillName, "repeat-focus")
+        : false,
+  );
+  const simulationUnsupported = cycleBuilderMode === "count" || cycle.length === 0 || unsupportedSimulationSkills.length > 0 || missingRequiredSimulationSkill || repeatFinisherDataMissing || simulationSkillDataMissing || unsupportedSimulationBuild || missingCycleSections || invalidCycleSections;
+  const executeCombatSimulation = () => {
+    if (simulationUnsupported || !unifiedSimulation) return;
+    if (simulationRunning) return;
+    setSimulationRunning(true);
+    window.setTimeout(() => {
+      let worker: Worker | null = null;
+    const playerLevel = Math.max(60, Math.min(100, simulationPlayerLevel));
+    const freeInputDelay = resolveSimulationInputDelay(
+      playerLevel as SimulationPlayerLevel,
+      false,
+    );
+    const patternInputDelay = resolveSimulationInputDelay(
+      playerLevel as SimulationPlayerLevel,
+      true,
+    );
+    const motionSeconds: Record<string, number> = {
+      "청룡진": 0.55, "맹룡열파": 0.9, "반월섬": 0.7, "사두룡격": 0.65,
+      "적룡포": 0.85, "유성강천": 1.25, "굉열파": 1.1, "적룡필살": 1.3,
+    };
+    const currentAttackSpeed = Math.max(1, sharedCombatSnapshot?.attackSpeedPercent ?? 130);
+    const staggerImmuneSkills = new Set(["맹룡열파", "반월섬", "적룡포", "유성강천", "굉열파", "적룡필살"]);
+    const simulationEntries =
+      !cycle.some((entry) => entry.skillName === "적룡필살")
+        ? [
+            ...cycle,
+            {
+              id: `repeat-finisher-${crypto.randomUUID()}`,
+              skillName: "적룡필살",
+              azureDragon: false,
+              yeongaSimGong: false,
+              useCount: 1,
+              section: "repeat-focus" as CycleSection,
+            },
+          ]
+        : cycle;
+    const skills = simulationEntries.map((entry) => {
+      const skill = visibleSkills.find((candidate) => candidate.name === entry.skillName);
+      const calculated = skill ? unifiedSimulation.skills[skill.id] : null;
+      const scenarioFor = (azureDragon: boolean, backAttack: boolean, yeongaSimGong: boolean) => calculated?.calculation.scenarios.find(
+        (scenario) => scenario.conditions.azureDragonBuff === azureDragon &&
+          scenario.conditions.backAttack === backAttack &&
+          scenario.conditions.yeongaSimGong === yeongaSimGong,
+      );
+      const normalScenario = scenarioFor(false, false, false);
+      const backScenario = scenarioFor(false, true, false) ?? normalScenario;
+      const yeongaNormalScenario = scenarioFor(false, false, true) ?? normalScenario;
+      const yeongaBackScenario = scenarioFor(false, true, true) ?? yeongaNormalScenario ?? backScenario;
+      const azureNormalScenario = scenarioFor(true, false, false) ?? normalScenario;
+      const azureBackScenario = scenarioFor(true, true, false) ?? azureNormalScenario;
+      const azureYeongaNormalScenario = scenarioFor(true, false, true) ?? azureNormalScenario;
+      const azureYeongaBackScenario = scenarioFor(true, true, true) ?? azureYeongaNormalScenario ?? azureBackScenario;
+      const catalogSkill = getGlavierSkill(entry.skillName);
+      const isBackAttackSkill = Boolean(catalogSkill?.tags.backAttack) || entry.skillName === "적룡필살";
+      // 시뮬레이션은 전분에서 입력한 스킬별 백어택/쿨타임 비율을 사용하지 않는다.
+      // 사이클의 백어택 기본 설정만 사용하고, 백어택 스킬과 적룡필살만 판정 대상으로 둔다.
+      return {
+        cardId: entry.id,
+        skillName: entry.skillName,
+        damage: normalScenario?.nonCriticalDamage ?? 0,
+        yeongaDamage: yeongaNormalScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
+        yeongaCriticalDamage: yeongaNormalScenario?.maximumDamage ?? normalScenario?.maximumDamage ?? 0,
+        backAttackDamage: backScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
+        criticalDamage: normalScenario?.maximumDamage ?? normalScenario?.nonCriticalDamage ?? 0,
+        backAttackCriticalDamage: backScenario?.maximumDamage ?? normalScenario?.maximumDamage,
+        yeongaBackAttackDamage: yeongaBackScenario?.nonCriticalDamage ?? yeongaNormalScenario?.nonCriticalDamage,
+        yeongaBackAttackCriticalDamage: yeongaBackScenario?.maximumDamage ?? yeongaNormalScenario?.maximumDamage,
+        cooldown: calculated?.cooldown?.cooldownSeconds ?? 0,
+        duration: (motionSeconds[entry.skillName] ?? 0.8) * 130 / currentAttackSpeed,
+        motionSeconds: (motionSeconds[entry.skillName] ?? 0.8) * 130 / currentAttackSpeed,
+        inputDelaySeconds: freeInputDelay,
+        patternChangeDelaySeconds: patternInputDelay,
+        isDragonFinisher: entry.skillName === "적룡필살",
+        staggerImmune: staggerImmuneSkills.has(entry.skillName),
+        criticalRate: normalScenario?.criticalRate ?? 0,
+        backAttackCriticalRate: backScenario?.criticalRate ?? normalScenario?.criticalRate ?? 0,
+        azureDamage: azureNormalScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
+        azureCriticalDamage: azureNormalScenario?.maximumDamage ?? normalScenario?.maximumDamage ?? 0,
+        azureBackAttackDamage: azureBackScenario?.nonCriticalDamage ?? azureNormalScenario?.nonCriticalDamage ?? 0,
+        azureBackAttackCriticalDamage: azureBackScenario?.maximumDamage ?? azureNormalScenario?.maximumDamage,
+        azureYeongaDamage: azureYeongaNormalScenario?.nonCriticalDamage ?? azureNormalScenario?.nonCriticalDamage,
+        azureYeongaCriticalDamage: azureYeongaNormalScenario?.maximumDamage ?? azureNormalScenario?.maximumDamage,
+        azureYeongaBackAttackDamage: azureYeongaBackScenario?.nonCriticalDamage ?? azureYeongaNormalScenario?.nonCriticalDamage,
+        azureYeongaBackAttackCriticalDamage: azureYeongaBackScenario?.maximumDamage ?? azureYeongaNormalScenario?.maximumDamage,
+        azureCriticalRate: azureNormalScenario?.criticalRate ?? normalScenario?.criticalRate ?? 0,
+        azureBackAttackCriticalRate: azureBackScenario?.criticalRate ?? azureNormalScenario?.criticalRate ?? 0,
+        isBackAttackSkill,
+        // 시뮬레이션은 현재 세팅의 전분 백어택 비율을 사용하지 않는다.
+        // 방향 전환으로 인한 손실은 별도 패턴 모델에서 다루기 전까지 100%로 판정한다.
+        backAttackRate: isBackAttackSkill ? 1 : 0,
+      };
+    });
+    const simulationInput = {
+      durationSeconds: Number(simulationDuration) || 700,
+      playerLevel: simulationPlayerLevel,
+      recordActions: true,
+      finisherReserveThresholdSeconds: Number(simulationFinisherThreshold) || 8,
+      simulationBuild: "jeoljeong-non222",
+      cycle: cycle.map((entry) => ({
+        cardId: entry.id,
+        skillName: entry.skillName,
+        azureDragon: entry.azureDragon,
+        yeongaSimGong: entry.yeongaSimGong,
+        useCount: entry.useCount,
+        section: entry.section,
+      })),
+      skills,
+      backAttackModel: "quota",
+    };
+    worker = new Worker(new URL("../domain/simulation/combat-simulation.worker.ts", import.meta.url));
+    worker.onmessage = (event: MessageEvent<ReturnType<typeof runCombatSimulations>>) => {
+      setSimulationResult(event.data);
+      worker?.terminate();
+      setSimulationRunning(false);
+    };
+    worker.onerror = () => {
+      worker?.terminate();
+      setSimulationRunning(false);
+    };
+    worker.postMessage({ input: simulationInput, runs: Number(simulationRuns) || 50 });
+    }, 0);
+  };
   const expectedDps =
     cycleSeconds > 0 && cycleDamageRows.length > 0
       ? cycleDamageRows.reduce((total, row) => total + row.totalDamage, 0) /
@@ -5218,7 +5742,9 @@ export default function Home() {
         )
       : 0;
   const currentComparisonSummary: SavedSettingComparisonSummary | null =
-    character && sharedCombatSnapshot
+    character &&
+    sharedCombatSnapshot &&
+    (cycleBuilderMode === "count" || cycleBuilderMode === "sequence")
       ? {
           classLabel: classEngraving ?? character.className,
           coreLabel: arkGridShorthand,
@@ -5295,6 +5821,7 @@ export default function Home() {
         cyclePresetId,
         cycleDurationMode,
         manualCycleSeconds,
+        manualCycleCpm,
         cycle,
         cycleSkillRatioSettings,
         allCycleBackAttack,
@@ -5350,7 +5877,7 @@ export default function Home() {
         await fetchCharacter(characterName.trim(), apiKey.trim()),
       );
       applyProfile(profile);
-      setCycle([]);
+      setActiveCycle([]);
       await saveCharacter(profile);
       setMessage("캐릭터 정보와 현재 세팅을 불러왔습니다.");
     } catch (error) {
@@ -5776,14 +6303,21 @@ export default function Home() {
     const name = window.prompt("스킬 프리셋 이름을 입력하세요.");
     if (!name?.trim()) return;
     const preset: UserCyclePreset = {
+      version: 2,
       id: `user-cycle-${crypto.randomUUID()}`,
       label: name.trim(),
-      entries: cycle.map(({ id: _id, ...entry }) => ({ ...entry })),
+      entries: sequenceCycle.map((entry) => ({
+        ...entry,
+        section: normalizeCycleSection(entry),
+      })),
+      calculationEntries: countCycle.map((entry) => ({
+        ...entry,
+        section: undefined,
+      })),
       builderMode: cycleBuilderMode,
-      guidanceSeconds:
-        cycleDurationMode === "guideline" && cycleSeconds > 0
-          ? cycleSeconds
-          : undefined,
+      // 사용자 프리셋은 자동 시간 숫자를 고정하지 않는다. 복원 후에도
+      // 현재 세팅의 보석·신속으로 다시 계산되어야 한다.
+      guidanceSeconds: undefined,
       manualSeconds:
         cycleDurationMode === "manual" ? manualCycleSeconds : undefined,
       createdAt: new Date().toISOString(),
@@ -5829,12 +6363,15 @@ export default function Home() {
     if (!character) return null;
     return JSON.parse(
       JSON.stringify({
+        version: 2,
         character,
         gems,
         stoneEffects,
         avatarGrades,
         visibleSkillIds,
         cycle,
+        sequenceCycle,
+        countCycle,
         cycleBuilderMode,
         sequenceCycleBackup,
         countModeBaselineSignature,
@@ -5875,7 +6412,7 @@ export default function Home() {
       const setting: SavedSetting = {
         id: overwrite?.id ?? crypto.randomUUID(),
         name,
-        cycle: cycle.map((entry) => entry.skillName),
+      cycle: sequenceCycle.map((entry) => entry.skillName),
         itemLevel: character.level,
         attackPower:
           sharedCombatSnapshot?.finalAttackPowerSnapshot.total.toFixed(2) ??
@@ -5944,11 +6481,37 @@ export default function Home() {
     setStoneEffects(snapshot.stoneEffects);
     setAvatarGrades(snapshot.avatarGrades);
     setVisibleSkillIds(snapshot.visibleSkillIds);
-    setCycle(
-      snapshot.cycle.map((entry) => ({
-        ...entry,
-        useCount: Math.max(0, Math.floor(Number(entry.useCount) || 1)),
-      })),
+    const restoredLegacyCycle = (snapshot.cycle ?? []).map((entry) => ({
+      ...entry,
+      id: entry.id ?? crypto.randomUUID(),
+      section: normalizeCycleSection(entry),
+      useCount: Math.max(0, Math.floor(Number(entry.useCount) || 1)),
+    }));
+    const hasSplitCycle = Boolean(snapshot.sequenceCycle || snapshot.countCycle);
+    const legacySequence = restoredLegacyCycle.map((entry) => ({
+      ...entry,
+      useCount: 1,
+    }));
+    const legacyCount = groupCycleEntriesByUsage(
+      restoredLegacyCycle.map((entry) => ({ ...entry, section: undefined })),
+    );
+    setSequenceCycle(
+      (snapshot.sequenceCycle ?? (hasSplitCycle ? [] : legacySequence))
+        .map((entry) => ({
+          ...entry,
+          id: entry.id ?? crypto.randomUUID(),
+          section: normalizeCycleSection(entry),
+          useCount: 1,
+        })),
+    );
+    setCountCycle(
+      (snapshot.countCycle ?? (hasSplitCycle ? [] : legacyCount))
+        .map((entry) => ({
+          ...entry,
+          id: entry.id ?? crypto.randomUUID(),
+          section: undefined,
+          useCount: Math.max(0, Math.floor(Number(entry.useCount) || 1)),
+        })),
     );
     setCycleBuilderMode(snapshot.cycleBuilderMode ?? "sequence");
     setSequenceCycleBackup(
@@ -5961,6 +6524,7 @@ export default function Home() {
     setCyclePresetId(snapshot.cyclePresetId);
     setCycleDurationMode(snapshot.cycleDurationMode);
     setManualCycleSeconds(snapshot.manualCycleSeconds);
+    setManualCycleCpm(snapshot.manualCycleCpm ?? "8.50");
     setCycleSkillRatioSettings(snapshot.cycleSkillRatioSettings);
     setAllCycleBackAttack(snapshot.allCycleBackAttack);
     setAllCycleCooldown(snapshot.allCycleCooldown);
@@ -5983,6 +6547,87 @@ export default function Home() {
     setMenu("simulation");
     setMessage(`'${setting.name}' 세팅을 불러왔습니다.`);
   }
+
+  const sequenceSectionKeys: CycleSection[] = [
+    "encounter",
+    "repeat-flurry",
+    ...(arkGridShorthand === "222" ? ["repeat-flurry-2" as const] : []),
+    "repeat-focus",
+  ];
+  const displayedCycleEntries =
+    cycleBuilderMode === "sequence"
+      ? [
+          ...cycle.filter((entry) => !entry.section),
+          ...sequenceSectionKeys.flatMap(
+            (section) => cycle.filter((entry) => entry.section === section),
+          ),
+        ]
+      : cycle;
+  const updateSequenceEntry = (id: string, update: Partial<CycleEntry>) => {
+    manualCycleEditRef.current = true;
+    setSequenceCycle((value) =>
+      value.map((entry) => (entry.id === id ? { ...entry, ...update } : entry)),
+    );
+  };
+  const moveSequenceEntry = (id: string, direction: -1 | 1) => {
+    manualCycleEditRef.current = true;
+    setSequenceCycle((value) => {
+      const currentIndex = value.findIndex((entry) => entry.id === id);
+      if (currentIndex < 0) return value;
+      const section = value[currentIndex].section;
+      const sectionIndices = value
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => entry.section === section)
+        .map(({ index }) => index);
+      const position = sectionIndices.indexOf(currentIndex);
+      const targetIndex = sectionIndices[position + direction];
+      if (targetIndex === undefined) return value;
+      const next = [...value];
+      [next[currentIndex], next[targetIndex]] = [next[targetIndex], next[currentIndex]];
+      return next;
+    });
+  };
+  const removeSequenceEntry = (id: string) => {
+    manualCycleEditRef.current = true;
+    setSequenceCycle((value) => value.filter((entry) => entry.id !== id));
+  };
+  const changeSequenceSection = (id: string, section: CycleSection) => {
+    manualCycleEditRef.current = true;
+    setSequenceCycle((value) =>
+      value.map((entry) => (entry.id === id ? { ...entry, section } : entry)),
+    );
+  };
+  const startSequenceDrag = (id: string) => {
+    setDraggedCycleIndex(sequenceCycle.findIndex((entry) => entry.id === id));
+  };
+  const dropSequenceDrag = (targetId: string) => {
+    if (draggedCycleIndex === null) return;
+    manualCycleEditRef.current = true;
+    setSequenceCycle((value) => {
+      const targetIndex = value.findIndex((entry) => entry.id === targetId);
+      const source = value[draggedCycleIndex];
+      if (!source || targetIndex < 0 || source.section !== value[targetIndex].section) return value;
+      const sectionIndices = value
+        .map((entry, index) => ({ entry, index }))
+        .filter(({ entry }) => entry.section === source.section)
+        .map(({ index }) => index);
+      if (!sectionIndices.includes(targetIndex)) return value;
+      const next = [...value];
+      const [moved] = next.splice(draggedCycleIndex, 1);
+      next.splice(targetIndex > draggedCycleIndex ? targetIndex - 1 : targetIndex, 0, moved);
+      return next;
+    });
+    setDraggedCycleIndex(null);
+  };
+  const endSequenceDrag = () => setDraggedCycleIndex(null);
+  const sequenceSections: { key: CycleSection; label: string; required: boolean }[] = [
+    { key: "encounter", label: "조우 사이클", required: false },
+    { key: "repeat-flurry", label: "난무 사이클", required: true },
+    ...(arkGridShorthand === "222"
+      ? [{ key: "repeat-flurry-2" as const, label: "난무 사이클 2", required: true }]
+      : []),
+    { key: "repeat-focus", label: "집중 사이클", required: true },
+  ];
 
   return (
     <main className="shell simulator-shell">
@@ -6783,6 +7428,7 @@ export default function Home() {
                     <input
                       type="checkbox"
                       checked={allCycleCooldown}
+                      disabled={isJeoljeong222}
                       onChange={(event) =>
                         toggleAllCycleRatio(
                           "cooldownRate",
@@ -6791,7 +7437,7 @@ export default function Home() {
                       }
                     />
                     <span className="cycle-global-label">
-                      쿨타임 전체
+                      쿨타임 전체{isJeoljeong222 ? " (CPM 적용)" : ""}
                     </span>
                     <input
                       aria-label="전체 쿨타임 비율"
@@ -6800,6 +7446,7 @@ export default function Home() {
                       max="100"
                       step="1"
                       value={allCycleCooldownRate}
+                      disabled={isJeoljeong222}
                       onChange={(event) =>
                         setAllCycleCooldownRate(event.target.value)
                       }
@@ -6860,7 +7507,7 @@ export default function Home() {
                                 ? allCycleCooldownRate
                                 : ratios.cooldownRate
                             }
-                            disabled={allCycleCooldown}
+                            disabled={allCycleCooldown || isJeoljeong222}
                             onChange={(event) =>
                               updateCycleSkillRatio(
                                 skill.name,
@@ -7281,7 +7928,7 @@ export default function Home() {
                     >
                       <div className="section-heading">
                         <div>
-                          <h2>전투 사이클 구성 ({cycle.length}개)</h2>
+                          <h2>전투 사이클 구성</h2>
                         </div>
                       </div>
                       <div className="cycle-add">
@@ -7316,39 +7963,29 @@ export default function Home() {
                                 .filter((entry) =>
                                   available.has(entry.skillName),
                                 )
-                                .map((entry) => ({
+                                .map((entry, index) => ({
                                   ...entry,
-                                  id: crypto.randomUUID(),
+                                  section: normalizeCycleSection(entry),
+                                  id: entry.id ?? crypto.randomUUID(),
                                   useCount: entry.useCount ?? 1,
                                 }));
                               const missingSkillCount =
                                 preset.entries.filter(
                                   (entry) => !available.has(entry.skillName),
                                 ).length;
-                              const presetBuilderMode =
-                                preset.builderMode ?? cycleBuilderMode;
-                              if (presetBuilderMode === "count") {
-                                const groupedCycle =
-                                  groupCycleEntriesByUsage(presetCycle);
-                                setCycleBuilderMode("count");
-                                if (preset.builderMode === "count") {
-                                  setSequenceCycleBackup(null);
-                                  setCountModeBaselineSignature(null);
-                                } else {
-                                  setSequenceCycleBackup(
-                                    presetCycle.map((entry) => ({ ...entry })),
-                                  );
-                                  setCountModeBaselineSignature(
-                                    cycleUsageSignature(groupedCycle),
-                                  );
-                                }
-                                setCycle(groupedCycle);
-                              } else {
-                                setCycleBuilderMode("sequence");
-                                setSequenceCycleBackup(null);
-                                setCountModeBaselineSignature(null);
-                                setCycle(presetCycle);
-                              }
+                              const countEntries = (preset.calculationEntries ?? preset.entries)
+                                .filter((entry) => available.has(entry.skillName))
+                                .map((entry) => ({
+                                  ...entry,
+                                  section: undefined,
+                                  id: entry.id ?? crypto.randomUUID(),
+                                  useCount: entry.useCount ?? 1,
+                                }));
+                              setSequenceCycle(presetCycle.map((entry) => ({ ...entry, useCount: 1 })));
+                              setCountCycle(groupCycleEntriesByUsage(countEntries));
+                              setCycleBuilderMode(preset.builderMode === "count" ? "count" : "sequence");
+                              setSequenceCycleBackup(null);
+                              setCountModeBaselineSignature(null);
                               if (preset.guidanceSeconds !== undefined) {
                                 setCycleDurationMode("guideline");
                               }
@@ -7398,14 +8035,37 @@ export default function Home() {
                               프리셋 삭제
                             </button>
                           </div>
-                          <select
-                            value={cycleSkill}
-                            onChange={(event) => {
+                          <div className="cycle-section-skill-row">
+                            <select
+                              aria-label="사이클 구간"
+                              value={cycleSection}
+                              disabled={cycleBuilderMode === "count"}
+                              onChange={(event) =>
+                                setCycleSection(event.target.value as CycleSection)
+                              }
+                            >
+                              <option value="encounter">조우 사이클(선택)</option>
+                              <option value="repeat-flurry">난무 사이클</option>
+                              {arkGridShorthand === "222" ? (
+                                <option value="repeat-flurry-2">난무 사이클 2</option>
+                              ) : null}
+                              <option value="repeat-focus">집중 사이클</option>
+                            </select>
+                            <select
+                              value={cycleSkill}
+                              onChange={(event) => {
                               const selectedSkill = event.target.value;
                               setCycleSkill("");
                               if (!selectedSkill) return;
+                              if (
+                                cycleBuilderMode === "sequence" &&
+                                !isSequenceSkillAllowedInSection(selectedSkill, cycleSection)
+                              ) {
+                                setMessage("해당 스킬은 선택한 사이클 구간에 배치할 수 없습니다.");
+                                return;
+                              }
                               manualCycleEditRef.current = true;
-                              setCycle((value) => {
+                              setActiveCycle((value) => {
                                 const next = [
                                   ...value,
                                   {
@@ -7414,21 +8074,30 @@ export default function Home() {
                                     azureDragon: false,
                                     yeongaSimGong: false,
                                     useCount: 1,
+                                    section: cycleSection,
                                   },
                                 ];
                                 return cycleBuilderMode === "count"
                                   ? groupCycleEntriesByUsage(next)
                                   : next;
                               });
-                            }}
-                          >
-                            <option value="">스킬 선택</option>
-                            {cycleSkills.map((skill) => (
-                              <option value={skill.name} key={skill.id}>
-                                {skill.name}
-                              </option>
-                            ))}
-                          </select>
+                              }}
+                            >
+                              <option value="">스킬 선택</option>
+                              {cycleSkills
+                                .filter(
+                                  (skill) =>
+                                    cycleBuilderMode !== "sequence" ||
+                                    cycleSection === "encounter" ||
+                                    isSequenceSkillAllowedInSection(skill.name, cycleSection),
+                                )
+                                .map((skill) => (
+                                  <option value={skill.name} key={skill.id}>
+                                    {skill.name}
+                                  </option>
+                                ))}
+                            </select>
+                          </div>
                         </div>
                         <div className="cycle-duration-controls">
                           <label className="cycle-duration-option">
@@ -7438,32 +8107,43 @@ export default function Home() {
                               disabled={guidelineCycleSeconds === null}
                               onChange={() => setCycleDurationMode("guideline")}
                             />
-                            <span>예상 사이클 시간</span>
-                            <strong>
-                              {guidelineCycleSeconds === null
-                                ? "내부 지침 미등록"
-                                : `${guidelineCycleSeconds.toFixed(2)}초`}
+                              <span>{isJeoljeong222 ? "예상 CPM" : "예상 사이클 시간"}</span>
+                              <strong>
+                              {isJeoljeong222
+                                ? `${guidelineCycleCpm?.toFixed(2) ?? "-"} CPM`
+                                : guidelineCycleSeconds === null
+                                  ? "내부 지침 미등록"
+                                  : `${guidelineCycleSeconds.toFixed(2)}초`}
                             </strong>
                           </label>
                           <label className="cycle-duration-option">
                             <input
                               type="checkbox"
                               checked={cycleDurationMode === "manual"}
+                              disabled={false}
                               onChange={() => setCycleDurationMode("manual")}
                             />
-                            <span>선택 사이클 시간</span>
+                            <span>{isJeoljeong222 ? "선택 CPM" : "선택 사이클 시간"}</span>
                             <input
-                              aria-label="선택 사이클 시간(초)"
+                              aria-label={isJeoljeong222 ? "선택 CPM" : "선택 사이클 시간(초)"}
                               type="number"
-                              min="0"
-                              step="0.1"
-                              value={manualCycleSeconds}
+                              min={isJeoljeong222 ? "1" : "0"}
+                              max={isJeoljeong222 ? "10" : undefined}
+                              step={isJeoljeong222 ? "0.01" : "0.1"}
+                              value={isJeoljeong222 ? manualCycleCpm : manualCycleSeconds}
                               disabled={cycleDurationMode !== "manual"}
-                              onChange={(event) =>
-                                setManualCycleSeconds(event.target.value)
-                              }
+                              onChange={(event) => {
+                                if (isJeoljeong222) {
+                                  const value = Number(event.target.value);
+                                  if (event.target.value === "" || (value >= 1 && value <= 10)) {
+                                    setManualCycleCpm(event.target.value);
+                                  }
+                                } else {
+                                  setManualCycleSeconds(event.target.value);
+                                }
+                              }}
                             />
-                            <em>초</em>
+                            <em>{isJeoljeong222 ? "CPM" : "초"}</em>
                           </label>
                           <fieldset
                             className="cycle-builder-mode-options"
@@ -7478,11 +8158,12 @@ export default function Home() {
                                 name="cycle-builder-mode"
                                 value="sequence"
                                 checked={cycleBuilderMode === "sequence"}
+                                disabled={classEngraving === "절제"}
                                 onChange={() =>
                                   switchCycleBuilderMode("sequence")
                                 }
                               />
-                              <span>순서 방식</span>
+                              <span>사이클 방식</span>
                             </label>
                             <label
                               className="cycle-builder-mode-option"
@@ -7504,7 +8185,7 @@ export default function Home() {
                             onClick={() => {
                               manualCycleEditRef.current = true;
                               setCyclePresetId("");
-                              setCycle([]);
+                              setActiveCycle([]);
                             }}
                             disabled={cycle.length === 0}
                           >
@@ -7512,22 +8193,147 @@ export default function Home() {
                           </button>
                         </div>
                       </div>
+                      {cycleBuilderMode === "sequence" ? (
+                        <div className="cycle-section-panels" data-cycle-section-panels>
+                          {cycle.some((entry) => !entry.section) ? (
+                            <section className="cycle-section-panel cycle-section-panel-unclassified">
+                              <div className="cycle-section-panel-heading">
+                                <strong>
+                                  {selectedCyclePreset?.id === "jeoljeong-222"
+                                    ? "특치연격 사이클"
+                                    : "미분류 기존 카드"}
+                                </strong>
+                                <span>
+                                  {selectedCyclePreset?.id === "jeoljeong-222"
+                                    ? "기존 사이클 순서를 유지합니다."
+                                    : "구간을 지정하면 해당 그리드로 이동합니다."}
+                                </span>
+                              </div>
+                              <div className="cycle-list sequence-mode">
+                                {cycle.filter((entry) => !entry.section).map((entry, index, entries) => (
+                                  <SequenceCycleCard
+                                    key={entry.id}
+                                    entry={entry}
+                                    order={index}
+                                    sectionLength={entries.length}
+                                    classEngraving={classEngraving}
+                                    skill={visibleSkills.find((candidate) => candidate.name === entry.skillName)}
+                                    azureDragonCycleIcon={azureDragonCycleIcon}
+                                    yeongaSimGongCycleIcon={yeongaSimGongCycleIcon}
+                                    onUpdate={updateSequenceEntry}
+                                    onMove={moveSequenceEntry}
+                                    onRemove={removeSequenceEntry}
+                                    onSectionChange={changeSequenceSection}
+                                    allowSectionChange={selectedCyclePreset?.id !== "jeoljeong-222"}
+                                    onDragStart={startSequenceDrag}
+                                    onDrop={dropSequenceDrag}
+                                    onDragEnd={endSequenceDrag}
+                                  />
+                                ))}
+                              </div>
+                            </section>
+                          ) : null}
+                          {sequenceSections
+                            .filter(({ key }) => !(key === "repeat-focus" && classEngraving === "절제"))
+                            .map(({ key, label, required }) => {
+                              const entries = cycle.filter((entry) => entry.section === key);
+                              return (
+                                <section className="cycle-section-panel" data-cycle-section={key} key={key}>
+                                  <div className="cycle-section-panel-heading">
+                                    <strong>{label}{required ? " (필수)" : " (선택)"}</strong>
+                                    {entries.length === 0 ? <span>{required ? "이 구간에 스킬을 추가하세요." : "조우 스킬이 없으면 비워둘 수 있습니다."}</span> : null}
+                                  </div>
+                                  <div className="cycle-list sequence-mode">
+                                    {entries.map((entry, index) => (
+                                      <SequenceCycleCard
+                                        key={entry.id}
+                                        entry={entry}
+                                        order={index}
+                                        sectionLength={entries.length}
+                                        classEngraving={classEngraving}
+                                        skill={visibleSkills.find((candidate) => candidate.name === entry.skillName)}
+                                        azureDragonCycleIcon={azureDragonCycleIcon}
+                                        yeongaSimGongCycleIcon={yeongaSimGongCycleIcon}
+                                        onUpdate={updateSequenceEntry}
+                                        onMove={moveSequenceEntry}
+                                        onRemove={removeSequenceEntry}
+                                        onSectionChange={changeSequenceSection}
+                                        onDragStart={startSequenceDrag}
+                                        onDrop={dropSequenceDrag}
+                                        onDragEnd={endSequenceDrag}
+                                      />
+                                    ))}
+                                  </div>
+                                </section>
+                              );
+                            })}
+                        </div>
+                      ) : null}
                       {cycle.length ? (
-                        <ol
-                          className={`cycle-list ${
+                        <div
+                          className={`cycle-list legacy-cycle-list ${
                             cycleBuilderMode === "count"
                               ? "count-mode"
                               : "sequence-mode"
                           }`}
                         >
-                          {cycle.map((entry, index) => {
+                          {cycleBuilderMode === "sequence"
+                            ? sequenceSectionKeys
+                                .filter(
+                                  (section) =>
+                                    !cycle.some((entry) => entry.section === section),
+                                )
+                                .map((section) => (
+                                  <div
+                                    className="cycle-section-group-heading cycle-section-group-heading-empty"
+                                    data-cycle-section={section}
+                                    key={`empty-${section}`}
+                                  >
+                                    {section === "encounter"
+                                      ? "조우 (선택)"
+                                      : section === "repeat-flurry"
+                                        ? "난무 사이클"
+                                        : section === "repeat-flurry-2"
+                                          ? "난무 사이클 2"
+                                          : "집중 사이클"}
+                                    <span>이 구간에 스킬을 추가하세요.</span>
+                                  </div>
+                                ))
+                            : null}
+                          {displayedCycleEntries.map((entry) => {
+                            const index = cycle.findIndex(
+                              (candidate) => candidate.id === entry.id,
+                            );
                             const { skillName } = entry;
+                            const sectionEntries = entry.section
+                              ? cycle.filter((candidate) => candidate.section === entry.section)
+                              : cycle;
+                            const sectionIndex = entry.section
+                              ? sectionEntries.findIndex((candidate) => candidate.id === entry.id)
+                              : index;
                             const skill = visibleSkills.find(
                               (candidate) => candidate.name === skillName,
                             );
 
                             return (
-                              <li
+                              <Fragment key={`cycle-group-${entry.id}`}>
+                              {cycleBuilderMode === "sequence" &&
+                              (index === cycle.findIndex((candidate) => candidate.section === entry.section)) ? (
+                                <div
+                                  className="cycle-section-group-heading"
+                                  data-cycle-section={entry.section}
+                                  key={`heading-${entry.section}`}
+                                >
+                                  {entry.section === "encounter"
+                                    ? "조우 (선택)"
+                                    : entry.section === "repeat-flurry"
+                                      ? "난무 사이클"
+                                      : entry.section === "repeat-flurry-2"
+                                        ? "난무 사이클 2"
+                                        : "집중 사이클"}
+                                </div>
+                              ) : null}
+                              <div
                                 className={`cycle-skill-tile${
                                   classEngraving === "절제" &&
                                   cycleBuilderMode === "sequence"
@@ -7552,19 +8358,25 @@ export default function Home() {
                                         event.preventDefault();
                                         if (
                                           draggedCycleIndex === null ||
-                                          draggedCycleIndex === index
+                                          draggedCycleIndex === index ||
+                                          cycle[draggedCycleIndex]?.section !== entry.section
                                         ) {
                                           setDraggedCycleIndex(null);
                                           return;
                                         }
                                         manualCycleEditRef.current = true;
-                                        setCycle((value) => {
+                                        setActiveCycle((value) => {
                                           const next = [...value];
-                                          const [moved] = next.splice(
-                                            draggedCycleIndex,
-                                            1,
-                                          );
-                                          next.splice(index, 0, moved);
+                                          const indices = next
+                                            .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+                                            .filter(({ candidate }) => candidate.section === entry.section)
+                                            .map(({ candidateIndex }) => candidateIndex);
+                                          const fromPosition = indices.indexOf(draggedCycleIndex);
+                                          const toPosition = indices.indexOf(index);
+                                          if (fromPosition < 0 || toPosition < 0) return next;
+                                          const [moved] = next.splice(draggedCycleIndex, 1);
+                                          const adjustedTarget = index > draggedCycleIndex ? index - 1 : index;
+                                          next.splice(adjustedTarget, 0, moved);
                                           return next;
                                         });
                                         setDraggedCycleIndex(null);
@@ -7577,8 +8389,35 @@ export default function Home() {
                                     : undefined
                                 }
                               >
+                                {cycleBuilderMode === "sequence" && !entry.section ? (
+                                  <select
+                                    className="cycle-section-select"
+                                    aria-label={`${skillName} 사이클 구간 지정`}
+                                    value=""
+                                    onChange={(event) => {
+                                      const nextSection = event.target.value as CycleSection;
+                                      manualCycleEditRef.current = true;
+                                      setActiveCycle((value) =>
+                                        value.map((candidate) =>
+                                          candidate.id === entry.id
+                                            ? { ...candidate, section: nextSection }
+                                            : candidate,
+                                        ),
+                                      );
+                                    }}
+                                  >
+                                    <option value="" disabled>구간 지정</option>
+                                    <option value="encounter">조우</option>
+                                    {getGlavierSkill(skillName)?.tags.flurry ? (
+                                      <option value="repeat-flurry">난무 사이클</option>
+                                    ) : null}
+                                    {getGlavierSkill(skillName)?.tags.focus ? (
+                                      <option value="repeat-focus">집중 사이클</option>
+                                    ) : null}
+                                  </select>
+                                ) : null}
                                 <b className="cycle-skill-order">
-                                  {index + 1}
+                                  {sectionIndex + 1}
                                 </b>
                                 <Artwork
                                   icon={skill?.icon ?? null}
@@ -7600,7 +8439,7 @@ export default function Home() {
                                     aria-pressed={entry.azureDragon}
                                     onClick={() =>
                                       (manualCycleEditRef.current = true,
-                                      setCycle((value) =>
+                                      setActiveCycle((value) =>
                                         value.map((candidate) =>
                                           candidate.id === entry.id
                                             ? {
@@ -7629,7 +8468,7 @@ export default function Home() {
                                     aria-pressed={entry.yeongaSimGong}
                                     onClick={() =>
                                       (manualCycleEditRef.current = true,
-                                      setCycle((value) =>
+                                      setActiveCycle((value) =>
                                         value.map((candidate) =>
                                           candidate.id === entry.id
                                             ? {
@@ -7681,14 +8520,22 @@ export default function Home() {
                                   <button
                                     type="button"
                                     aria-label={`${skillName} 한 칸 왼쪽 이동`}
-                                    disabled={index === 0}
+                                    disabled={sectionIndex === 0}
                                     onClick={() =>
                                       (manualCycleEditRef.current = true,
-                                      setCycle((value) => {
+                                      setActiveCycle((value) => {
                                         const next = [...value];
-                                        [next[index - 1], next[index]] = [
-                                          next[index],
-                                          next[index - 1],
+                                        const currentIndex = next.findIndex((candidate) => candidate.id === entry.id);
+                                        const indices = next
+                                          .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+                                          .filter(({ candidate }) => candidate.section === entry.section)
+                                          .map(({ candidateIndex }) => candidateIndex);
+                                        const position = indices.indexOf(currentIndex);
+                                        if (position <= 0) return next;
+                                        const previousIndex = indices[position - 1];
+                                        [next[previousIndex], next[currentIndex]] = [
+                                          next[currentIndex],
+                                          next[previousIndex],
                                         ];
                                         return next;
                                       }))
@@ -7699,14 +8546,22 @@ export default function Home() {
                                   <button
                                     type="button"
                                     aria-label={`${skillName} 한 칸 오른쪽 이동`}
-                                    disabled={index === cycle.length - 1}
+                                    disabled={sectionIndex === sectionEntries.length - 1}
                                     onClick={() =>
                                       (manualCycleEditRef.current = true,
-                                      setCycle((value) => {
+                                      setActiveCycle((value) => {
                                         const next = [...value];
-                                        [next[index], next[index + 1]] = [
-                                          next[index + 1],
-                                          next[index],
+                                        const currentIndex = next.findIndex((candidate) => candidate.id === entry.id);
+                                        const indices = next
+                                          .map((candidate, candidateIndex) => ({ candidate, candidateIndex }))
+                                          .filter(({ candidate }) => candidate.section === entry.section)
+                                          .map(({ candidateIndex }) => candidateIndex);
+                                        const position = indices.indexOf(currentIndex);
+                                        if (position < 0 || position >= indices.length - 1) return next;
+                                        const nextIndex = indices[position + 1];
+                                        [next[currentIndex], next[nextIndex]] = [
+                                          next[nextIndex],
+                                          next[currentIndex],
                                         ];
                                         return next;
                                       }))
@@ -7722,7 +8577,7 @@ export default function Home() {
                                   aria-label={`${skillName} 삭제`}
                                   onClick={() =>
                                     (manualCycleEditRef.current = true,
-                                    setCycle((value) =>
+                                    setActiveCycle((value) =>
                                       value.filter(
                                         (candidate) => candidate.id !== entry.id,
                                       ),
@@ -7731,10 +8586,11 @@ export default function Home() {
                                 >
                                   ×
                                 </button>
-                              </li>
+                              </div>
+                              </Fragment>
                             );
                           })}
-                        </ol>
+                        </div>
                       ) : (
                         <p className="empty-copy">
                           전투 사이클에 사용할 스킬을 추가하세요.
@@ -7743,10 +8599,42 @@ export default function Home() {
                     </section>
                   </>
                 ) : null}
-                {tab === "임시" ? (
-                  <section className="empty-tab-panel">
-                    <h2>임시</h2>
-                    <p className="empty-copy">추후 추가될 기능을 준비 중입니다.</p>
+                {tab === "시뮬레이션" ? (
+                  <section className="combat-simulation-panel">
+                    <div className="simulation-panel-heading">
+                      <div>
+                        <h2>벨가르딘 나메 2관 전투 시뮬레이션</h2>
+                        <p>입력한 전투시간까지 현재 사이클을 반복해 예상 피해를 계산합니다.</p>
+                      </div>
+                      <span className="simulation-mode-badge">사이클 방식 전용</span>
+                    </div>
+                    <div className="simulation-controls">
+                      <label>전투시간(초)<input type="number" min="1" value={simulationDuration} onChange={(event) => { setSimulationDuration(event.target.value); setSimulationResult(null); }} /></label>
+                      <label>플레이 수준<select value={simulationPlayerLevel} onChange={(event) => { setSimulationPlayerLevel(Number(event.target.value) as SimulationPlayerLevel); setSimulationResult(null); }}><option value="100">100% 이론상</option><option value="90">90% 최상위권</option><option value="85">85% 상위권</option><option value="80">80% 중상위권</option><option value="70">70% 중위권</option><option value="60">60% 하위권</option></select></label>
+                      <label>필살 예약 기준(초)<input type="number" min="1" max="10" step="0.1" value={simulationFinisherThreshold} onChange={(event) => { setSimulationFinisherThreshold(event.target.value); setSimulationResult(null); }} /></label>
+                      <label>시뮬레이션 횟수<input type="number" min="1" max="10000" value={simulationRuns} onChange={(event) => { setSimulationRuns(event.target.value); setSimulationResult(null); }} /></label>
+                      <button type="button" onClick={executeCombatSimulation} disabled={simulationUnsupported || simulationRunning}>{simulationRunning ? "시뮬레이션 계산 중..." : "시뮬레이션 실행"}</button>
+                    </div>
+                    {simulationRunning ? <div className="simulation-loading" role="status" aria-live="polite">
+                      <div className="simulation-loading-label">시뮬레이션 계산 중...</div>
+                      <div className="simulation-loading-track" aria-hidden="true"><span /></div>
+                      <small>지정한 횟수를 계산하고 있습니다. 잠시만 기다려 주세요.</small>
+                    </div> : null}
+                    {simulationUnsupported ? <p className="simulation-warning">{cycleBuilderMode === "count" ? "사이클 방식만 지원하며 횟수 방식은 실행할 수 없습니다." : unsupportedSimulationBuild ? "현재 시뮬레이션은 333 창식이만 지원합니다." : unsupportedSimulationSkills.length > 0 ? `현재 시뮬레이션은 ${[...new Set(unsupportedSimulationSkills)].join(", ")} 스킬을 지원하지 않습니다.` : invalidCycleSections ? "난무·집중 구간에 맞는 스킬만 배치할 수 없습니다." : missingRequiredSimulationSkill ? "현재 시뮬레이션은 맹룡열파가 포함된 절정 사이클만 지원합니다." : repeatFinisherDataMissing ? "반복 적룡필살의 계산 데이터를 불러오지 못했습니다." : simulationSkillDataMissing ? "현재 사이클 스킬의 최종 쿨타임·대미지 계산 데이터를 불러오지 못했습니다." : missingCycleSections ? "조우·난무 사이클·집중 사이클 구간을 카드별로 지정해야 합니다." : "사이클 방식으로 스킬을 구성한 뒤 실행할 수 있습니다."}</p> : null}
+                    {simulationResult ? <div className="simulation-results" aria-live="polite">
+                      <div><span>평균 총 대미지</span><strong>{simulationResult.totalDamage.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
+                      <div><span>예상 DPS</span><strong>{simulationResult.dps.toLocaleString(undefined, { maximumFractionDigits: 0 })}</strong></div>
+                      <div><span>치명타율</span><strong>{simulationResult.successfulUses ? ((simulationResult.criticals / simulationResult.successfulUses) * 100).toFixed(2) : "0.00"}%</strong></div>
+                    </div> : <p className="empty-copy">현재 세팅을 기준으로 실행 버튼을 눌러 결과를 확인하세요.</p>}
+                    {simulationResult ? <div className="simulation-detail-table-wrap">
+                      <h3>스킬별 평균 실행 결과 ({simulationResult.runs}회)</h3>
+                      <table className="simulation-detail-table">
+                        <thead><tr><th>스킬</th><th>사용</th><th>치명타율</th><th>백어택률</th><th>청룡진 적용률</th><th>쿨비</th><th>총 대미지</th></tr></thead>
+                        <tbody>{simulationResult.skillStatistics.map((row) => <tr key={row.skillName}>
+                          <th scope="row">{row.skillName}</th><td>{row.uses.toFixed(2)}</td><td>{row.hits ? ((row.criticals / row.hits) * 100).toFixed(2) : "0.00"}%</td><td>{row.hits ? ((row.backAttacks / row.hits) * 100).toFixed(2) : "0.00"}%</td><td>{row.hits ? ((row.azureHits / row.hits) * 100).toFixed(2) : "0.00"}%</td><td>{(row.cooldownRatio * 100).toFixed(2)}%</td><td>{row.totalDamage.toLocaleString(undefined, { maximumFractionDigits: 0 })}</td>
+                        </tr>)}</tbody>
+                      </table>
+                    </div> : null}
                   </section>
                 ) : null}
               </div>
