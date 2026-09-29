@@ -29,6 +29,12 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      - name: Operator Worker type check
+        run: pnpm exec tsc --noEmit -p workers/lostark-api/tsconfig.json
+
+      - name: Operator Worker contract test
+        run: node --test workers/lostark-api/src/index.test.ts
+
       - name: UI source rules
         run: pnpm check:ui
 

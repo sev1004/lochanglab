@@ -26,7 +26,8 @@ import {
   type SkillProfile,
 } from "@/domain/character/character-systems-parser";
 import { loadLatestCharacter, saveCharacter } from "@/lib/character-storage";
-import { fetchCharacter, LostArkApiError } from "@/lib/lostark-api/client";
+import { fetchCharacter, LostArkApiError, OPERATOR_API_ENABLED } from "@/lib/lostark-api/client";
+import { OperatorApiError } from "@/lib/lostark-api/operator-client";
 import { ENGRAVING_NAMES, engravingIcon } from "@/data/engraving-catalog";
 import {
   BRACELET_EFFECT_OPTIONS,
@@ -1896,6 +1897,14 @@ const gridPoints = [20, 19, 18, 17, 14, 10];
 const arkGridCoreDisplayOrder = [0, 3, 1, 4, 2, 5] as const;
 
 function errorMessage(error: unknown) {
+  if (error instanceof OperatorApiError) {
+    if (error.code === "OPERATOR_DISABLED") return "API 키를 입력하거나 운영 조회 기능을 설정해주세요.";
+    if (error.code === "CHARACTER_NOT_FOUND") return "캐릭터를 찾을 수 없습니다.";
+    if (error.code === "RATE_LIMITED") return `조회 요청이 많습니다. ${error.retryAfterSeconds ?? 1}초 후 다시 시도해주세요.`;
+    if (error.code === "OPERATOR_AUTH_UNAVAILABLE") return "운영 API 설정에 문제가 있습니다. 개인 API 키를 사용해주세요.";
+    if (error.code === "OPERATOR_TIMEOUT") return "운영 API 응답 시간이 초과되었습니다. 잠시 후 다시 시도해주세요.";
+    return "운영 API에 연결하지 못했습니다. 개인 API 키를 입력해 다시 시도해주세요.";
+  }
   if (error instanceof LostArkApiError)
     return (
       errors[error.status] ??
@@ -4415,7 +4424,7 @@ export default function Home() {
   const [characterName, setCharacterName] = useState("");
   const [character, setCharacter] = useState<CharacterProfile | null>(null);
   const [message, setMessage] = useState(
-    "API 설정에서 API 키를 입력한 뒤 캐릭터를 조회하세요.",
+    "개인 API 키를 입력하거나 운영 조회 기능으로 캐릭터를 조회하세요.",
   );
   const [searching, setSearching] = useState(false);
   const [sequenceCycle, setSequenceCycle] = useState<CycleEntry[]>([]);
@@ -5861,9 +5870,9 @@ export default function Home() {
   const engravingNames = ENGRAVING_NAMES;
   async function search(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!apiKey.trim()) {
+    if (!apiKey.trim() && !OPERATOR_API_ENABLED) {
       setMenu("api");
-      setMessage("먼저 API 설정에서 키를 입력해주세요.");
+      setMessage("API 키를 입력하거나 운영 조회 기능을 설정해주세요.");
       return;
     }
     if (!characterName.trim()) {
@@ -5874,7 +5883,7 @@ export default function Home() {
     setMessage("로스트아크 API에서 캐릭터 정보를 불러오는 중입니다...");
     try {
       const profile = mapCharacterResponse(
-        await fetchCharacter(characterName.trim(), apiKey.trim()),
+        await fetchCharacter(characterName.trim(), apiKey.trim() || undefined),
       );
       applyProfile(profile);
       setActiveCycle([]);
@@ -6685,8 +6694,8 @@ export default function Home() {
             <div>
               <h1>API 설정</h1>
               <p>
-                선택하면 API 키를 현재 브라우저의 localStorage에 저장해 다음
-                접속에도 사용합니다.
+                개인 API 키를 입력하면 우선 사용합니다. 입력하지 않으면 운영
+                조회 기능을 사용합니다.
               </p>
             </div>
           </div>
@@ -8651,8 +8660,8 @@ export default function Home() {
               <span>01</span>
               <h1>시뮬레이션 시작</h1>
               <p>
-                API 설정 후 캐릭터명을 입력하면 장비, 아크 시스템, 스킬과 보석을
-                모두 불러옵니다.
+                개인 API 키를 입력하면 해당 키를 우선 사용하고, 키가 없으면 운영
+                조회 기능으로 장비, 아크 시스템, 스킬과 보석을 불러옵니다.
               </p>
             </section>
           )}
