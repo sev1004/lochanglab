@@ -2018,6 +2018,17 @@ footer {
 footer span {
   color: var(--accent);
 }
+.site-attribution {
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font-family: inherit;
+  font-size: calc(10 * var(--ui-px));
+  line-height: 1.6;
+  padding: calc(24 * var(--ui-px)) 0 calc(20 * var(--ui-px));
+}
+.site-attribution p {
+  margin: 0;
+}
 @media (max-width: 760px) {
   .shell {
     padding: 0 calc(16 * var(--ui-px));
