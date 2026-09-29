@@ -1166,7 +1166,7 @@ function createCyclePresets(
   return [
     {
       id: "jeoljeong-222",
-      label: "특치연격 사이클",
+      label: "연격",
       entries: availableSkills.length
         ? createJeoljeong222SectionedEntries(availableSkills)
         : jeoljeong222SectionedEntries,
@@ -8219,7 +8219,7 @@ export default function Home() {
                               <div className="cycle-section-panel-heading">
                                 <strong>
                                   {selectedCyclePreset?.id === "jeoljeong-222"
-                                    ? "특치연격 사이클"
+                                    ? "연격"
                                     : "미분류 기존 카드"}
                                 </strong>
                                 <span>
@@ -8870,6 +8870,10 @@ export default function Home() {
           </form>
         </div>
       ) : null}
+      <footer className="site-attribution" aria-label="서비스 출처 안내">
+        <p>This site is not associated with Smilegate RPG &amp; Smilegate Stove.</p>
+        <p>Data based on Lostark Open API.</p>
+      </footer>
     </main>
   );
 }
