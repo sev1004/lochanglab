@@ -1495,6 +1495,16 @@ const simTabs: SimulationTab[] = [
 ];
 const siteNotices = [
   {
+    version: "v1.2.1",
+    date: "2026.09.29",
+    title: "운영 API 조회 및 개인 API 키 안내 개선",
+    items: [
+      "개인 API 키를 입력하지 않아도 운영 API 조회 기능으로 캐릭터를 검색할 수 있습니다.",
+      "운영 API 호출 제한에 도달한 경우, API 설정에서 본인의 Lost Ark API 키를 입력하면 개인 키를 우선 사용해 조회할 수 있습니다.",
+      "개인 API 키는 기존 방식대로 브라우저에서 직접 입력·저장·삭제할 수 있으며, 입력한 키가 있으면 운영 API보다 먼저 사용합니다.",
+    ],
+  },
+  {
     version: "v1.2",
     date: "2026.09.29",
     title: "전투 시뮬레이션 추가 및 사이클 구성 개편",
