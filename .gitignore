@@ -9,3 +9,9 @@ coverage/
 .env.local
 .env.*.local
 !.env.example
+.dev.vars
+.dev.vars.*
+.wrangler/
+분석데이터/
+workers/lostark-api/node_modules/
+workers/lostark-api/.dev.vars

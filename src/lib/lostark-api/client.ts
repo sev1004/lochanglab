@@ -1,11 +1,14 @@
-import { CharacterApiResponse, LostArkArmoryResponse } from "@/types/lostark-api";
+import type { CharacterApiResponse, LostArkArmoryResponse } from "../../types/lostark-api.ts";
+import { fetchCharacterFromOperator, OperatorApiError } from "./operator-client.ts";
 
 const BASE_URL = "https://developer-lostark.game.onstove.com";
 
 export class LostArkApiError extends Error {
-  constructor(public readonly status: number) {
+  public readonly status: number;
+  constructor(status: number) {
     super(`Lost Ark API returned ${status}`);
     this.name = "LostArkApiError";
+    this.status = status;
   }
 }
 
@@ -33,7 +36,7 @@ async function optionalRequest<T>(path: string, apiKey: string, fallback: T): Pr
   }
 }
 
-export async function fetchCharacter(characterName: string, apiKey: string): Promise<CharacterApiResponse> {
+export async function fetchCharacterWithApiKey(characterName: string, apiKey: string): Promise<CharacterApiResponse> {
   const encodedName = encodeURIComponent(characterName);
   const armory = await request<LostArkArmoryResponse>(`/armories/characters/${encodedName}`, apiKey);
   const [arkPassive, arkGrid] = await Promise.all([
@@ -51,4 +54,19 @@ export async function fetchCharacter(characterName: string, apiKey: string): Pro
     arkPassive,
     arkGrid,
   };
+}
+
+export const OPERATOR_API_BASE_URL =
+  process.env.NEXT_PUBLIC_OPERATOR_API_BASE_URL?.trim() ?? "";
+
+export const OPERATOR_API_ENABLED =
+  process.env.NEXT_PUBLIC_OPERATOR_API_ENABLED === "true" &&
+  OPERATOR_API_BASE_URL.length > 0;
+
+export async function fetchCharacter(characterName: string, apiKey?: string): Promise<CharacterApiResponse> {
+  if (apiKey?.trim()) return fetchCharacterWithApiKey(characterName, apiKey);
+  if (!OPERATOR_API_ENABLED) {
+    throw new OperatorApiError("OPERATOR_DISABLED");
+  }
+  return fetchCharacterFromOperator(characterName, OPERATOR_API_BASE_URL);
 }

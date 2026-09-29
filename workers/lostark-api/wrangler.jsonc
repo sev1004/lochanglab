@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lochanglab-lostark-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-29",
+  "vars": {
+    "OPERATOR_LOOKUP_ENABLED": "false",
+    "UPSTREAM_REQUEST_LIMIT": "0",
+    "UPSTREAM_WINDOW_SECONDS": "60"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "COORDINATOR", "class_name": "Coordinator" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Coordinator"] }]
+}
