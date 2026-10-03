@@ -77,6 +77,28 @@ test("질서 코어 공용 적주피는 전용 경로에서 한 번만 적용한
   assert.ok(Math.abs(snapshot.totalMultiplier - expected) < 1e-12);
 });
 
+test("절제 PVE 상향은 기존 피해에 4%를 곱하고 절정과 팔찌 상대 효율은 유지한다", () => {
+  const source = {
+    engravings: [{ name: "원한", grade: "전설" as const, level: 4 }],
+    stoneEffects: [],
+    accessories: [],
+    enlightenment: [],
+    moveSpeedPercent: 100,
+  };
+  const bracelet = {
+    slot: "팔찌",
+    options: ["적에게 주는 피해 +3%"],
+  } as unknown as CharacterProfile["equipment"][number];
+  const baseline = createEnemyDamageSnapshot(source).totalMultiplier;
+  assert.equal(baseline, 1.18);
+  for (const classEngraving of ["절제", "절정"] as const) {
+    const withoutBracelet = createEnemyDamageSnapshot({ ...source, classEngraving }).totalMultiplier;
+    const withBracelet = createEnemyDamageSnapshot({ ...source, classEngraving, bracelet }).totalMultiplier;
+    assert.ok(Math.abs(withoutBracelet / baseline - (classEngraving === "절제" ? 1.04 : 1)) < 1e-12);
+    assert.ok(Math.abs(withBracelet / withoutBracelet - 1.03) < 1e-12);
+  }
+});
+
 test("마나·홀딩 각인은 공용 적주피에서 제외하고 스킬 조건별 배율로 보관한다", () => {
   const source = {
     engravings: [
