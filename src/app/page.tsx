@@ -1495,6 +1495,14 @@ const simTabs: SimulationTab[] = [
 ];
 const siteNotices = [
   {
+    version: "v1.2.2",
+    date: "2026.10.03",
+    title: "절제 PVE 피해량 상향 반영",
+    items: [
+      "절제의 PVE 피해량 상향(+4%)을 DPS 계산에 반영했습니다.",
+    ],
+  },
+  {
     version: "v1.2.1",
     date: "2026.09.29",
     title: "운영 API 조회 및 개인 API 키 안내 개선",

@@ -973,12 +973,15 @@ export function createEnemyDamageSnapshot(source: {
     (1 + necklace / 100) * (1 + bracelet / 100);
   const arkGridMultiplier = (1 + gems / 100) * orderCore * chaosCore;
   const enlightenmentMultiplier = 1 + enlightenment / 100;
+  // 절제 PVE 피해량 4% 상향: 기존 깨달음·스킬 배율과 독립적으로 한 번 적용한다.
+  const classBalanceMultiplier = source.classEngraving === "절제" ? 1.04 : 1;
   const totalMultiplier =
     engravingSnapshot.totalMultiplier *
     (1 + commanderDamage / 100) *
     accessoriesBraceletMultiplier *
     arkGridMultiplier *
-    enlightenmentMultiplier;
+    enlightenmentMultiplier *
+    classBalanceMultiplier;
   return {
     engravingAndStone: engravingSnapshot.totalMultiplier,
     commanderDamage,
