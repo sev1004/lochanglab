@@ -396,6 +396,8 @@ export function calculateCombatStages(
 }
 
 export type SingleSkillCalculationInput = CombatCalculationInput & {
+  /** 예상 밸패 전용. 일반 계산 호출은 이 옵션을 전달하지 않는다. */
+  expectedBalance?: { additionalCriticalRate: number };
   /** UI/API 원본이 아닌 내부 스냅샷에서 확정한 계산 단계 값. */
   snapshot?: {
     finalAttackPower?: number;
@@ -481,6 +483,7 @@ export type SkillDamageScenarioResult = {
   backAttackDamageMultiplier: number;
   nonCriticalDamage: number;
   maximumDamage: number;
+  expectedCriticalDamage?: number;
   averageDamage: number;
 };
 
@@ -500,7 +503,17 @@ function selectedTripodEffects(
     // 최대 피해 기준으로 계산한다. 실제 전투 조건에 따른 별도 스위치만 조건부로 남긴다.
     const conditional = effect.status === "조건부 적용";
     if (conditional && !includeConditional) pending.push(effect);
-    else if (effect.status === "적용") selected.push(effect);
+    else if (effect.status === "적용") {
+      if (effect.effectType === "치명타 확률 가산" &&
+        ((skill.name === "사두룡격" && ["급소 타격", "그림자 찌르기"].includes(effect.name)) ||
+          (skill.name === "굉열파" && ["파괴하는 창", "공파섬"].includes(effect.name)) ||
+          (skill.name === "유성강천" && effect.name === "강력한 마무리") ||
+          (skill.name === "적룡포" && effect.name === "파괴하는 창") ||
+          (skill.name === "절룡세" && effect.name === "급소 강타"))) continue;
+      selected.push(skill.name === "굉열파" && effect.name === "약점 포착" && effect.effectType === "대미지 배율"
+        ? { ...effect, percentValue: 0.96, appliedMultiplier: 1.96 }
+        : effect);
+    }
   }
   return { selected, pending };
 }
@@ -553,10 +566,19 @@ export function calculateSingleSkillDamage(
     isAwakeningSkill
       ? (input.leapEffects?.find((effect) => effect.name === name)?.level ?? 0)
       : 0;
-  // 관통 필살은 레벨마다 치적이 누적되는 효과가 아니라, 선택 시 초각성 스킬의
-  // 치명타 적중률을 100% 증가시키는 단일 효과다. 레벨은 피해량 단계에만 사용한다.
-  const awakeningCriticalRate =
-    skill.name === "적룡필살" && leapLevel("관통 필살") > 0 ? 1 : 0;
+  const piercingFinisherLevel = skill.name === "적룡필살" ? leapLevel("관통 필살") : 0;
+  const forcedCriticalTripod: Record<string, string> = {
+    사두룡격: "그림자 찌르기",
+    굉열파: "파괴하는 창",
+    유성강천: "강력한 마무리",
+    절룡세: "급소 강타",
+    적룡포: "파괴하는 창",
+  };
+  const guaranteeTripod = forcedCriticalTripod[skill.name];
+  const forcedCritical = piercingFinisherLevel > 0 ||
+    Boolean(guaranteeTripod && input.skill.selectedTripodNames?.includes(guaranteeTripod));
+  const ironSlam = skill.name === "철량추" &&
+    (input.skill.selectedTripodNames ?? []).includes("지면 강타");
   const criticalEffects: CombatEffect[] = selected.flatMap(
     (effect): CombatEffect[] => {
       if (effect.percentValue === null) return [];
@@ -616,17 +638,6 @@ export function calculateSingleSkillDamage(
     ...input.effects,
     ...criticalEffects,
     ...enlightenmentEffects,
-    ...(awakeningCriticalRate > 0
-      ? [
-          {
-            id: `leap-${skill.code}-crit-rate`,
-            label: `${skill.name} · 관통 필살`,
-            bucket: "criticalRate" as const,
-            value: awakeningCriticalRate,
-            source: { system: "manual" as const },
-          },
-        ]
-      : []),
   ];
   const combat = calculateCombatStages({
     ...input,
@@ -712,7 +723,7 @@ export function calculateSingleSkillDamage(
   const awakeningDamageMultiplier = isAwakeningSkill
     ? (1 + leapLevel("풀려난 힘") * 0.03) *
       (skill.name === "적룡필살"
-        ? (1 + Math.max(0, leapLevel("관통 필살") - 1) * 0.1) *
+        ? (piercingFinisherLevel > 0 ? ([0.9, 1.05, 1.2][piercingFinisherLevel - 1] ?? 1.2) : 1) *
           (1 + leapLevel("내지르기") * 0.25)
         : 1) *
       (skill.name === "맹룡난무"
@@ -735,7 +746,7 @@ export function calculateSingleSkillDamage(
     ? {
         ...input.evolutionContext,
         // 뭉툭한 가시의 초과 치적 전환은 표기/기대값용 상한 이전의 원본 치적을 쓴다.
-        criticalRate: rawSkillCriticalRate,
+        criticalRate: forcedCritical ? 0 : rawSkillCriticalRate,
         skillName: skill.name,
       }
     : null;
@@ -842,16 +853,17 @@ export function calculateSingleSkillDamage(
         const effectiveBackAttack = backAttack || arkGridOrder.forceBackAttack;
         const rawCriticalRate =
           rawSkillCriticalRate +
+          (input.expectedBalance?.additionalCriticalRate ?? 0) +
           (azureDragonBuff ? 0.2 : 0) +
           (effectiveBackAttack && skill.tags.backAttack ? 0.1 : 0);
         const criticalRate = Math.min(
-          bluntSpikesCriticalCap,
+          forcedCritical ? 1 : bluntSpikesCriticalCap,
           Math.max(0, rawCriticalRate),
         );
         const scenarioEvolutionDamageRate = input.evolutionContext
           ? evolutionDamageRate({
               ...input.evolutionContext,
-              criticalRate: rawCriticalRate,
+              criticalRate: forcedCritical ? 0 : rawCriticalRate,
               skillName: skill.name,
             })
           : 0;
@@ -861,36 +873,56 @@ export function calculateSingleSkillDamage(
           gemDamageMultiplier *
           (1 + scenarioEvolutionDamageRate) *
           awakeningDamageMultiplier;
-        const nonCriticalDamage =
+        const baseDamage =
           scenarioSkillBaseDamage *
           nonCriticalScale *
           backAttackSkillScale *
           (effectiveBackAttack ? backAttackSuccessScale : 1) *
           skillTypeDamageMultiplier *
           (yeongaSimGong ? yeongaSimGongMultiplier : 1);
+        const nonCriticalDamage = baseDamage *
+          (forcedCritical ? 1 + Math.max(0, rawCriticalRate) * 0.6 : 1);
+        const hitCriticalRate = forcedCritical ? 1 : criticalRate;
         const maximumDamage =
           nonCriticalDamage *
           combat.stages.criticalDamageMultiplier *
           combat.stages.criticalOutgoingMultiplier;
         const criticalExpectedMultiplier =
           1 -
-          criticalRate +
-          criticalRate *
+          hitCriticalRate +
+          hitCriticalRate *
             combat.stages.criticalDamageMultiplier *
             combat.stages.criticalOutgoingMultiplier;
+        const extraCriticalCount = bluntSpikesLevel > 0 || forcedCritical
+          ? 0
+          : Math.max(0, rawCriticalRate - 1);
+        const extraCriticalDamage =
+          (combat.stages.criticalDamageMultiplier - 1) *
+          combat.stages.criticalOutgoingMultiplier;
+        const slamEvolutionRate = ironSlam && input.evolutionContext
+          ? evolutionDamageRate({ ...input.evolutionContext, criticalRate: 0, skillName: skill.name })
+          : 0;
+        const slamDamage = ironSlam
+          ? maximumDamage / (1 + scenarioEvolutionDamageRate) *
+            (1 + slamEvolutionRate) * (1 + Math.max(0, rawCriticalRate) * 0.6)
+          : 0;
         scenarios.push({
           conditions: { azureDragonBuff, backAttack, yeongaSimGong },
           rawCriticalRate,
-          criticalRate,
+          criticalRate: hitCriticalRate,
           evolutionDamageRate: scenarioEvolutionDamageRate,
           yeongaSimGongMultiplier: yeongaSimGong ? yeongaSimGongMultiplier : 1,
           skillTypeDamageMultiplier,
           backAttackDamageMultiplier: effectiveBackAttack
             ? backAttackSuccessScale
             : 1,
-          nonCriticalDamage,
-          maximumDamage,
-          averageDamage: nonCriticalDamage * criticalExpectedMultiplier,
+          nonCriticalDamage: nonCriticalDamage + slamDamage,
+          maximumDamage: maximumDamage + slamDamage + nonCriticalDamage *
+            Math.ceil(extraCriticalCount) * Math.max(0, extraCriticalDamage),
+          expectedCriticalDamage: maximumDamage + slamDamage + nonCriticalDamage *
+            extraCriticalCount * extraCriticalDamage,
+          averageDamage: slamDamage + nonCriticalDamage *
+            (criticalExpectedMultiplier + extraCriticalCount * extraCriticalDamage),
         });
       }
     }
@@ -918,7 +950,7 @@ export function calculateSingleSkillDamage(
     motionMultiplier,
     tripodDamageMultiplier,
     awakeningDamageMultiplier,
-    awakeningCriticalRateBonus: awakeningCriticalRate,
+    awakeningCriticalRateBonus: 0,
     arkGridOrder,
     gemDamageMultiplier,
     skillBaseDamage,

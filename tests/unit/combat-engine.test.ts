@@ -27,6 +27,58 @@ const closeTo = (actual: number, expected: number, epsilon = 1e-12) => {
   );
 };
 
+test("예상 다중 치명타는 일반·뭉가 기대값과 치주피를 조건별로 계산한다", () => {
+  for (const [rate, damage, blunt, expected] of [
+    [1.1, 2, false, 2.1],
+    [1.15, 3, false, 3.3],
+    [1.15, 3, true, 2.6],
+    [1.25, 3, true, 2.6],
+    [1.2, 2.5, false, 2.8],
+    [2.5, 3, false, 6],
+    [3.25, 3, false, 7.5],
+  ] as const) {
+    const input = {
+      ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: rate } }),
+      snapshot: { criticalDamageMultiplier: damage },
+      evolutionContext: { evolution: blunt ? [{ name: "뭉툭한 가시", level: 2 }] : [] },
+      skill: { name: "적룡포", level: 14 },
+    };
+    const current = calculateSingleSkillDamage(input);
+    const preview = calculateSingleSkillDamage({ ...input, expectedBalance: { additionalCriticalRate: 0 } });
+    closeTo(preview.expectedDamage / preview.normalDamage, expected);
+    closeTo(current.expectedDamage / current.normalDamage, expected);
+    const outgoing = calculateSingleSkillDamage({
+      ...input,
+      snapshot: { criticalDamageMultiplier: damage, criticalOutgoingMultiplier: 1.1385 },
+      expectedBalance: { additionalCriticalRate: 0 },
+    });
+    const p = Math.min(blunt ? 0.8 : 1, rate);
+    const m = blunt ? 0 : Math.max(0, rate - 1);
+    closeTo(outgoing.expectedDamage / outgoing.normalDamage,
+      1 - p + p * damage * 1.1385 + p * m * (damage - 1) * 1.1385);
+  }
+});
+
+test("예상 추가 치적은 뭉가 진피를 재계산하고 청룡진·백어택 조건을 보존한다", () => {
+  const input = {
+    ...baseInput({ base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.85 } }),
+    evolutionContext: { evolution: [{ name: "뭉툭한 가시", level: 2 }] },
+    skill: { name: "적룡포", level: 14 },
+  };
+  const before = calculateSingleSkillDamage({ ...input, expectedBalance: { additionalCriticalRate: 0 } });
+  const after = calculateSingleSkillDamage({ ...input, expectedBalance: { additionalCriticalRate: 0.1 } });
+  for (let i = 0; i < before.scenarios.length; i++) {
+    const original = before.scenarios[i];
+    const changed = after.scenarios[i];
+    assert.deepEqual(changed.conditions, original.conditions);
+    closeTo(changed.rawCriticalRate - original.rawCriticalRate, 0.1);
+    closeTo(changed.criticalRate, 0.8);
+    closeTo(changed.evolutionDamageRate,
+      bluntSpikesEvolutionDamage(changed.rawCriticalRate, 2));
+    assert.ok(changed.averageDamage >= original.averageDamage);
+  }
+});
+
 function baseInput(
   patch: Partial<CombatCalculationInput> = {},
 ): CombatCalculationInput {
@@ -248,7 +300,8 @@ test("대미지·치명 트라이포드는 단일 스킬에만 각각 적용한�
     enhanced.normalDamage,
     enhanced.skillBaseDamage * BASE_DEFENSE_MULTIPLIER,
   );
-  assert.equal(enhanced.combat.stages.criticalRate, 1);
+  assert.equal(enhanced.scenarios[0].criticalRate, 1);
+  assert.equal(enhanced.scenarios[0].rawCriticalRate, 0);
   closeTo(enhanced.expectedDamage, enhanced.maximumCriticalDamage);
   closeTo(enhanced.maximumCriticalDamage / enhanced.normalDamage, 2.6);
 });
@@ -273,8 +326,9 @@ test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한�
     ],
     skill: { name: "적룡필살", level: 1 },
   });
-  closeTo(enhanced.skillBaseDamage / base.skillBaseDamage, 1.06 * 1.1 * 1.25);
-  assert.equal(enhanced.combat.stages.criticalRate, 1);
+  closeTo(enhanced.skillBaseDamage / base.skillBaseDamage, 1.06 * 1.05 * 1.25);
+  assert.equal(enhanced.scenarios[0].criticalRate, 1);
+  assert.equal(enhanced.scenarios[0].rawCriticalRate, 0.5);
 
   const levelThree = calculateSingleSkillDamage({
     ...baseInput({
@@ -283,7 +337,7 @@ test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한�
     leapEffects: [{ name: "관통 필살", level: 3 }],
     skill: { name: "적룡필살", level: 1 },
   });
-  assert.equal(levelThree.combat.stages.criticalRate, 1);
+  assert.equal(levelThree.scenarios[0].criticalRate, 1);
 
   const flurryAwakening = calculateSingleSkillDamage({
     ...baseInput({
@@ -299,6 +353,30 @@ test("초각성 도약 효과는 적룡필살에만 피해·치적을 적용한�
   });
   closeTo(flurryAwakening.awakeningDamageMultiplier, 1.25 * 1.3);
   closeTo(flurryAwakening.awakeningCriticalRateBonus, 0);
+});
+
+test("그림자 찌르기는 실제 치적을 피해로 환산하고 뭉가 초과분과 중복하지 않는다", () => {
+  const input = {
+    ...baseInput({
+      base: { primaryStat: 600_000, weaponAttack: 100_000, criticalRate: 0.1 },
+    }),
+    evolutionContext: { evolution: [{ name: "뭉툭한 가시", level: 2 }] },
+    skill: { name: "사두룡격", level: 14, selectedTripodNames: ["그림자 찌르기"] },
+  };
+  const result = calculateSingleSkillDamage(input);
+  const back = result.scenarios.find((row) =>
+    row.conditions.backAttack && !row.conditions.azureDragonBuff && !row.conditions.yeongaSimGong
+  )!;
+  const regular = calculateSingleSkillDamage({ ...input, skill: { ...input.skill, selectedTripodNames: [] } });
+  closeTo(back.rawCriticalRate, 0.2);
+  closeTo(back.criticalRate, 1);
+  closeTo(back.nonCriticalDamage / regular.normalDamage, 1.12);
+  const highCrit = calculateSingleSkillDamage({
+    ...input,
+    expectedBalance: { additionalCriticalRate: 1 },
+  });
+  closeTo(highCrit.scenarios[0].evolutionDamageRate, 0.19);
+  closeTo(highCrit.expectedDamage / highCrit.maximumCriticalDamage, 1);
 });
 
 test("청룡진·백어택·연가심공 조건을 독립된 스킬 대미지 시나리오로 계산한다", () => {
@@ -461,10 +539,10 @@ test("청룡진과 백어택 치적은 뭉툭한 가시 진화형 피해 계산 
       !scenario.conditions.yeongaSimGong,
   )!;
 
-  closeTo(noCondition.evolutionDamageRate, 0.15);
+  closeTo(noCondition.evolutionDamageRate, 0.19);
   closeTo(azureAndBack.rawCriticalRate, 1);
   closeTo(azureAndBack.criticalRate, 0.8);
-  closeTo(azureAndBack.evolutionDamageRate, 0.45);
+  closeTo(azureAndBack.evolutionDamageRate, 0.47);
 });
 
 test("청룡진 스킬 자체도 청룡진 치적 시나리오를 가진다", () => {
@@ -584,9 +662,9 @@ test("질서 코어의 강제 백어택은 미적중 시나리오에도 백어�
 });
 
 test("뭉툭한 가시는 초과 치적을 진화형 피해로 변환하고 상한을 적용한다", () => {
-  assert.equal(bluntSpikesEvolutionDamage(1.2, 1), 0.525);
-  assert.equal(bluntSpikesEvolutionDamage(1.25, 2), 0.75);
-  assert.equal(bluntSpikesEvolutionDamage(0.65, 2), 0.15);
+  closeTo(bluntSpikesEvolutionDamage(1.2, 1), 0.575);
+  closeTo(bluntSpikesEvolutionDamage(1.25, 2), 0.82);
+  closeTo(bluntSpikesEvolutionDamage(0.65, 2), 0.19);
 });
 
 test("음속 돌파는 두 속도가 모두 상한을 넘을 때 각각의 초과분을 합산한다", () => {
@@ -627,7 +705,7 @@ test("백어택 스킬은 백어택 치적 10%를 뭉툭한 가시 변환에만 
       criticalRate: 0.75,
       isBackAttack: false,
     }),
-    0.075,
+    0.095,
   );
   assert.equal(
     skillEvolutionDamageByBackAttack({
@@ -636,7 +714,7 @@ test("백어택 스킬은 백어택 치적 10%를 뭉툭한 가시 변환에만 
       criticalRate: 0.75,
       isBackAttack: true,
     }),
-    0.1375,
+    0.155,
   );
   assert.equal(
     skillEvolutionDamageByBackAttack({
@@ -645,7 +723,7 @@ test("백어택 스킬은 백어택 치적 10%를 뭉툭한 가시 변환에만 
       criticalRate: 0.75,
       isBackAttack: true,
     }),
-    0.075,
+    0.095,
   );
 });
 

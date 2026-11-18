@@ -2,8 +2,8 @@
   "뭉툭한 가시": {
     "type": "critical-rate-conversion",
     "levels": {
-      "1": { "baseEvolutionDamagePercent": 7.5, "criticalRateCapPercent": 80, "conversionRate": 1.25, "maxEvolutionDamagePercent": 52.5 },
-      "2": { "baseEvolutionDamagePercent": 15, "criticalRateCapPercent": 80, "conversionRate": 1.5, "maxEvolutionDamagePercent": 75 }
+      "1": { "baseEvolutionDamagePercent": 9.5, "criticalRateCapPercent": 80, "conversionRate": 1.2 },
+      "2": { "baseEvolutionDamagePercent": 19, "criticalRateCapPercent": 80, "conversionRate": 1.4 }
     }
   },
   "음속 돌파": {

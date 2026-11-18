@@ -7,7 +7,6 @@ type T5OptionLevel = {
   baseEvolutionDamagePercent: number;
   criticalRateCapPercent: number;
   conversionRate: number;
-  maxEvolutionDamagePercent: number;
 };
 type SpeedOptionLevel = {
   speedToEvolutionRate: number;
@@ -30,12 +29,7 @@ export function bluntSpikesEvolutionDamage(
     0,
     criticalRatePercent - option.criticalRateCapPercent,
   );
-  return (
-    Math.min(
-      option.maxEvolutionDamagePercent,
-      option.baseEvolutionDamagePercent + excess * option.conversionRate,
-    ) / 100
-  );
+  return (option.baseEvolutionDamagePercent + excess * option.conversionRate) / 100;
 }
 
 export function sonicBreakthroughEvolutionDamage(
