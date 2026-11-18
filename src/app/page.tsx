@@ -666,7 +666,7 @@ function parseDpsScreenshotSkillRatios(
 }
 
 type MainMenu = "simulation" | "api" | "notice" | "guide" | "bug";
-type SimulationTab = "아크 패시브&사이클" | "기본 장비" | "시뮬레이션";
+type SimulationTab = "아크 패시브&사이클" | "기본 장비" | "시뮬레이션" | "예상 밸패";
 type CycleSection =
   | "encounter"
   | "repeat-flurry"
@@ -1492,8 +1492,20 @@ const simTabs: SimulationTab[] = [
   "아크 패시브&사이클",
   "기본 장비",
   "시뮬레이션",
+  "예상 밸패",
 ];
 const siteNotices = [
+  {
+    version: "v1.3.0",
+    date: "2026.11.18",
+    title: "다중 치명타 및 창술사 밸런스 패치 반영",
+    items: [
+      "치적 100%를 넘는 구간의 다중 치명타와 뭉툭한 가시의 새 피해 전환 규칙을 반영했습니다.",
+      "창술사 트라이포드와 관통 필살의 확정 치명타 및 치적 피해 환산, 연가 창식 14p의 집중 스킬 피해 7%를 반영했습니다.",
+      "예상 밸패 탭에서 현재 사이클의 추가 치적에 따른 스킬별 피해와 DPS를 비교할 수 있습니다.",
+      "전투 시뮬레이션에서 섬광구슬 가동률에 따른 치명타율과 피해를 반영합니다.",
+    ],
+  },
   {
     version: "v1.2.2",
     date: "2026.10.03",
@@ -1868,7 +1880,7 @@ const leapOptions = [
     name: "관통 필살",
     maxLevel: 3,
     icon: "https://cdn-lostark.game.onstove.com/efui_iconatlas/ark_passive_lm/ark_passive_lm_11.png",
-    description: "해당 스킬 피해량 Lv2부터 10%씩 증가",
+    description: "적룡필살 확정 치명타 · 치적 1%당 피해 +0.6% · 피해 −10%/+5%/+20%",
   },
   {
     name: "내지르기",
@@ -2851,8 +2863,21 @@ function SkillEditorV2({
       ? tripod
       : { ...tripod, name: "없음", level: null },
   );
+  const renameTripod = (name: string) =>
+    skill.name === "사두룡격" && name === "급소 타격" ? "단단한 갑옷" : name;
   const catalog =
     GLAVIER_SKILL_TRIPODS[skill.name as keyof typeof GLAVIER_SKILL_TRIPODS];
+  const patchedTripodDescriptions: Record<string, string> = {
+    "철량추/지면 강타": "내려찍기가 항상 치명타로 적중하며 치적 1%당 피해량 +0.6%",
+    "사두룡격/단단한 갑옷": "시전 중 받는 피해 30.0/40.8% 감소",
+    "사두룡격/그림자 찌르기": "항상 치명타로 적중하며 치적 1%당 피해량 +0.6%",
+    "굉열파/파괴하는 창": "확정 치명타 · 치적 1%당 피해 +0.6% · 치피 +10/60%",
+    "굉열파/약점 포착": "피격이상 면역 대상 피해 +60/96%",
+    "굉열파/공파섬": "차지 완료 시 피해 +50/83%",
+    "유성강천/강력한 마무리": "확정 치명타 · 치적 1%당 피해 +0.6% · 치피 +10/60%",
+    "절룡세/급소 강타": "찌르기 확정 치명타 · 치적 1%당 피해 +0.6%",
+    "적룡포/파괴하는 창": "확정 치명타 · 치적 1%당 피해 +0.6% · 치피 +10/60%",
+  };
   const details = GLAVIER_SKILL_TRIPOD_DETAILS[skill.name] ?? [];
   const criticalRate = calculation.combat.stages.criticalRate;
   const isBackAttackSkill = calculation.evolution.isBackAttackSkill;
@@ -2945,7 +2970,7 @@ function SkillEditorV2({
       <div className="skill-tripod-selects">
         {activeTripods.map((tripod, index) => {
           const options = [
-            ...new Set([tripod.name, ...(catalog?.[index] ?? [])]),
+            ...new Set([tripod.name, ...(catalog?.[index] ?? [])].map(renameTripod)),
           ];
           const detail = details.find(
             (item) => item.tier === index + 1 && item.name === tripod.name,
@@ -2953,12 +2978,12 @@ function SkillEditorV2({
           return (
             <div
               className="skill-tripod-tooltip"
-              data-tooltip={detail?.description ?? tripod.name}
+              data-tooltip={patchedTripodDescriptions[`${skill.name}/${renameTripod(tripod.name)}`] ?? detail?.description ?? tripod.name}
               key={`tripod-${skill.id}-${index}`}
             >
               <select
                 aria-label={`${skill.name} 트라이포드 ${index + 1}`}
-                value={tripod.name}
+                value={renameTripod(tripod.name)}
                 disabled={index >= selectableTripodCount}
                 onChange={(event) =>
                   onChange({
@@ -4436,6 +4461,7 @@ export default function Home() {
   const [dopingPanelLeft, setDopingPanelLeft] = useState<number | null>(null);
   const [menu, setMenu] = useState<MainMenu>("simulation");
   const [tab, setTab] = useState<SimulationTab>("아크 패시브&사이클");
+  const [balancePatchCriticalRate, setBalancePatchCriticalRate] = useState("10");
   const [apiKey, setApiKey] = useState("");
   const [rememberApiKey, setRememberApiKey] = useState(false);
   const [hasSavedApiKey, setHasSavedApiKey] = useState(false);
@@ -5003,6 +5029,7 @@ export default function Home() {
   const buildSimulationForSnapshot = (
     simulationSnapshot: NonNullable<typeof sharedCombatSnapshot>,
     includeBracelet = true,
+    expectedBalance?: { additionalCriticalRate: number },
   ) => {
     if (!character) return null;
     const evolutionRank =
@@ -5092,6 +5119,7 @@ export default function Home() {
             moveSpeedPercent: simulationSnapshot.moveSpeedPercent,
             supportRageBuff,
           },
+          expectedBalance,
           leapEffects: character.arkPassive.leap,
           skill: {
             name: skill.name,
@@ -5180,16 +5208,31 @@ export default function Home() {
                   scenario.conditions.yeongaSimGong ===
                     baseScenario.conditions.yeongaSimGong,
               );
-              return flashOrbScenario
-                ? {
-                  ...baseScenario,
-                  // 최대 대미지는 섬광구슬이 켜진 상태에서 가능한 최고값을 표기한다.
-                  maximumDamage: flashOrbScenario.maximumDamage,
-                  averageDamage:
-                    baseScenario.averageDamage * baseRate +
-                      flashOrbScenario.averageDamage * uptimeRate,
-                  }
-                : baseScenario;
+              if (!flashOrbScenario) return baseScenario;
+              // 치명·비치명 각각의 피해는 해당 결과가 발생하는 비중으로 섞는다.
+              const baseCriticalWeight = baseScenario.criticalRate * baseRate;
+              const orbCriticalWeight = flashOrbScenario.criticalRate * uptimeRate;
+              const criticalRate = baseCriticalWeight + orbCriticalWeight;
+              const baseNormalWeight = (1 - baseScenario.criticalRate) * baseRate;
+              const orbNormalWeight = (1 - flashOrbScenario.criticalRate) * uptimeRate;
+              const normalWeight = baseNormalWeight + orbNormalWeight;
+              const baseCriticalDamage = baseScenario.expectedCriticalDamage ?? baseScenario.maximumDamage;
+              const orbCriticalDamage = flashOrbScenario.expectedCriticalDamage ?? flashOrbScenario.maximumDamage;
+              return {
+                ...baseScenario,
+                criticalRate,
+                nonCriticalDamage: normalWeight > 0
+                  ? (baseScenario.nonCriticalDamage * baseNormalWeight +
+                      flashOrbScenario.nonCriticalDamage * orbNormalWeight) / normalWeight
+                  : baseScenario.nonCriticalDamage,
+                expectedCriticalDamage: criticalRate > 0
+                  ? (baseCriticalDamage * baseCriticalWeight + orbCriticalDamage * orbCriticalWeight) / criticalRate
+                  : baseCriticalDamage,
+                maximumDamage: flashOrbScenario.maximumDamage,
+                averageDamage:
+                  baseScenario.averageDamage * baseRate +
+                  flashOrbScenario.averageDamage * uptimeRate,
+              };
             },
           );
           const defaultScenario = scenarios.find(
@@ -5564,6 +5607,40 @@ export default function Home() {
     }));
   };
   const cycleDamageRows = calculateCycleDamageRows(unifiedSimulation);
+  // 섬광구슬은 각 상태에서 먼저 재계산한 뒤 가동률로 혼합한다.
+  const buildBalancePreview = (additionalCriticalRate: number) =>
+    sharedCombatSnapshot && tab === "예상 밸패"
+      ? blendFlashOrbSimulation(
+          buildSimulationForSnapshot(sharedCombatSnapshot, true, { additionalCriticalRate }),
+          flashOrbCombatSnapshot
+            ? buildSimulationForSnapshot(flashOrbCombatSnapshot, true, { additionalCriticalRate })
+            : null,
+          flashOrbUptimeRate,
+        )
+      : null;
+  const balancePatchBaseRows = tab === "예상 밸패" ? cycleDamageRows : [];
+  const additionalBalanceCriticalRate = Math.min(100, Math.max(0, Number(balancePatchCriticalRate) || 0)) / 100;
+  const balancePatchSynergyRows = calculateCycleDamageRows(buildBalancePreview(additionalBalanceCriticalRate));
+  const balancePatchRows = balancePatchBaseRows.map((row) => {
+    const synergy = balancePatchSynergyRows.find((candidate) => candidate.skillName === row.skillName);
+    return {
+      ...row,
+      currentAverage: row.averageDamage,
+      synergyAverage: synergy?.averageDamage ?? 0,
+      synergyIncrease: row.totalDamage > 0 ? ((synergy?.totalDamage ?? 0) / row.totalDamage - 1) * 100 : null,
+    };
+  });
+  const balanceDpsFor = (rows: typeof cycleDamageRows) =>
+    cycleSeconds > 0 && rows.length > 0
+      ? rows.reduce((total, row) => total + row.totalDamage, 0) / cycleSeconds
+      : null;
+  const balancePatchCurrentDps = balanceDpsFor(cycleDamageRows);
+  const balancePatchDps = balanceDpsFor(balancePatchBaseRows);
+  const balancePatchWithSynergyDps = balanceDpsFor(balancePatchSynergyRows);
+  const balancePatchSynergyIncrease = balancePatchDps && balancePatchWithSynergyDps !== null
+    ? (balancePatchWithSynergyDps / balancePatchDps - 1) * 100 : null;
+  const formatDps = (value: number | null) => value === null ? "—" : Math.floor(value).toLocaleString();
+  const formatPercent = (value: number | null) => value === null ? "—" : `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
   const braceletFreeCycleDamageRows =
     calculateCycleDamageRows(braceletFreeSimulation);
   const unsupportedSimulationSkills = cycle
@@ -5659,12 +5736,12 @@ export default function Home() {
         skillName: entry.skillName,
         damage: normalScenario?.nonCriticalDamage ?? 0,
         yeongaDamage: yeongaNormalScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
-        yeongaCriticalDamage: yeongaNormalScenario?.maximumDamage ?? normalScenario?.maximumDamage ?? 0,
+        yeongaCriticalDamage: yeongaNormalScenario?.expectedCriticalDamage ?? normalScenario?.expectedCriticalDamage ?? 0,
         backAttackDamage: backScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
-        criticalDamage: normalScenario?.maximumDamage ?? normalScenario?.nonCriticalDamage ?? 0,
-        backAttackCriticalDamage: backScenario?.maximumDamage ?? normalScenario?.maximumDamage,
+        criticalDamage: normalScenario?.expectedCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
+        backAttackCriticalDamage: backScenario?.expectedCriticalDamage ?? normalScenario?.expectedCriticalDamage,
         yeongaBackAttackDamage: yeongaBackScenario?.nonCriticalDamage ?? yeongaNormalScenario?.nonCriticalDamage,
-        yeongaBackAttackCriticalDamage: yeongaBackScenario?.maximumDamage ?? yeongaNormalScenario?.maximumDamage,
+        yeongaBackAttackCriticalDamage: yeongaBackScenario?.expectedCriticalDamage ?? yeongaNormalScenario?.expectedCriticalDamage,
         cooldown: calculated?.cooldown?.cooldownSeconds ?? 0,
         duration: (motionSeconds[entry.skillName] ?? 0.8) * 130 / currentAttackSpeed,
         motionSeconds: (motionSeconds[entry.skillName] ?? 0.8) * 130 / currentAttackSpeed,
@@ -5675,13 +5752,13 @@ export default function Home() {
         criticalRate: normalScenario?.criticalRate ?? 0,
         backAttackCriticalRate: backScenario?.criticalRate ?? normalScenario?.criticalRate ?? 0,
         azureDamage: azureNormalScenario?.nonCriticalDamage ?? normalScenario?.nonCriticalDamage ?? 0,
-        azureCriticalDamage: azureNormalScenario?.maximumDamage ?? normalScenario?.maximumDamage ?? 0,
+        azureCriticalDamage: azureNormalScenario?.expectedCriticalDamage ?? normalScenario?.expectedCriticalDamage ?? 0,
         azureBackAttackDamage: azureBackScenario?.nonCriticalDamage ?? azureNormalScenario?.nonCriticalDamage ?? 0,
-        azureBackAttackCriticalDamage: azureBackScenario?.maximumDamage ?? azureNormalScenario?.maximumDamage,
+        azureBackAttackCriticalDamage: azureBackScenario?.expectedCriticalDamage ?? azureNormalScenario?.expectedCriticalDamage,
         azureYeongaDamage: azureYeongaNormalScenario?.nonCriticalDamage ?? azureNormalScenario?.nonCriticalDamage,
-        azureYeongaCriticalDamage: azureYeongaNormalScenario?.maximumDamage ?? azureNormalScenario?.maximumDamage,
+        azureYeongaCriticalDamage: azureYeongaNormalScenario?.expectedCriticalDamage ?? azureNormalScenario?.expectedCriticalDamage,
         azureYeongaBackAttackDamage: azureYeongaBackScenario?.nonCriticalDamage ?? azureYeongaNormalScenario?.nonCriticalDamage,
-        azureYeongaBackAttackCriticalDamage: azureYeongaBackScenario?.maximumDamage ?? azureYeongaNormalScenario?.maximumDamage,
+        azureYeongaBackAttackCriticalDamage: azureYeongaBackScenario?.expectedCriticalDamage ?? azureYeongaNormalScenario?.expectedCriticalDamage,
         azureCriticalRate: azureNormalScenario?.criticalRate ?? normalScenario?.criticalRate ?? 0,
         azureBackAttackCriticalRate: azureBackScenario?.criticalRate ?? azureNormalScenario?.criticalRate ?? 0,
         isBackAttackSkill,
@@ -8662,6 +8739,79 @@ export default function Home() {
                         </tr>)}</tbody>
                       </table>
                     </div> : null}
+                  </section>
+                ) : null}
+                {tab === "예상 밸패" ? (
+                  <section className="balance-preview">
+                    <div className="balance-preview-heading">
+                      <div>
+                        <small>현재 사이클 기준 · 예상 밸패</small>
+                        <h2>다중 치명타 적용 비교</h2>
+                        <p>{classEngraving} {arkGridShorthand} · 사이클 {cycleSeconds.toFixed(2)}초</p>
+                      </div>
+                    </div>
+                    <label className="balance-patch-critical-input">
+                      추가 치적 (%p)
+                      <input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={balancePatchCriticalRate}
+                        onChange={(event) => setBalancePatchCriticalRate(event.target.value)}
+                      />
+                    </label>
+                    {balancePatchRows.length > 0 ? (
+                      <>
+                        <div className="balance-dps-comparison">
+                          <div>
+                            <span>현재 기준 DPS</span>
+                            <strong>{formatDps(balancePatchCurrentDps)}</strong>
+                          </div>
+                          <div>
+                            <span>추가 치적 적용 DPS</span>
+                            <strong>{formatDps(balancePatchWithSynergyDps)}</strong>
+                            <small>현재 대비 {formatPercent(balancePatchCurrentDps && balancePatchWithSynergyDps !== null ? (balancePatchWithSynergyDps / balancePatchCurrentDps - 1) * 100 : null)}</small>
+                          </div>
+                          <div>
+                            <span>추가 치적 효과</span>
+                            <strong>{formatPercent(balancePatchSynergyIncrease)}</strong>
+                          </div>
+                        </div>
+                        <div className="balance-skill-comparison">
+                          <h3>스킬별 강화 효과</h3>
+                          <p>현재 사이클의 버프와 백어택 조건을 반영한 1회 평균 피해입니다.</p>
+                          <div className="balance-table-scroll">
+                          <table className="balance-skill-table">
+                            <thead>
+                              <tr>
+                                <th>스킬</th>
+                                <th>추가 치적 효과</th>
+                                <th>현재 평균 피해</th>
+                                <th>추가 치적 피해</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {balancePatchRows.map((row) => (
+                              <tr key={row.skillName}>
+                                <th scope="row">{row.skillName}</th>
+                                <td className="balance-gain">{formatPercent(row.synergyIncrease)}</td>
+                                <td>{formatDamageInEok(row.currentAverage)}</td>
+                                <td>{formatDamageInEok(row.synergyAverage)}</td>
+                              </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="empty-copy">현재 사이클에 사용 스킬을 구성하면 패치 전후 예상 DPS를 확인할 수 있습니다.</p>
+                    )}
+                    <details className="balance-assumptions">
+                      <summary>예상 계산 기준</summary>
+                      <p>현재 기준 DPS에 다중 치명타 패치가 적용되어 있습니다. 치적이 100%를 넘을 때마다 치명타 추가 피해가 누적됩니다. 뭉툭한 가시는 실제 치적이 80%로 제한되며, 초과분은 진화형 피해로 전환됩니다.</p>
+                    </details>
                   </section>
                 ) : null}
               </div>

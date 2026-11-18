@@ -132,33 +132,17 @@
       "grade": "고대",
       "coreName": "연가 창식",
       "point": 14,
-      "kind": "criticalRate",
+      "kind": "skillTypeDamage",
       "skillType": "focus",
-      "percent": -20
+      "percent": 7
     },
     {
       "grade": "유물",
       "coreName": "연가 창식",
       "point": 14,
-      "kind": "criticalRate",
+      "kind": "skillTypeDamage",
       "skillType": "focus",
-      "percent": -20
-    },
-    {
-      "grade": "고대",
-      "coreName": "연가 창식",
-      "point": 14,
-      "kind": "criticalOutgoingDamage",
-      "skillType": "focus",
-      "percent": 20
-    },
-    {
-      "grade": "유물",
-      "coreName": "연가 창식",
-      "point": 14,
-      "kind": "criticalOutgoingDamage",
-      "skillType": "focus",
-      "percent": 20
+      "percent": 7
     },
     {
       "grade": "고대",
